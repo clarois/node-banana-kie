@@ -28,6 +28,7 @@ import {
 import { EditableEdge } from "./edges";
 import { ConnectionDropMenu } from "./ConnectionDropMenu";
 import { MultiSelectToolbar } from "./MultiSelectToolbar";
+import { EdgeToolbar } from "./EdgeToolbar";
 import { NodeType } from "@/types";
 
 const nodeTypes: NodeTypes = {
@@ -119,33 +120,109 @@ function WorkflowCanvasInner() {
     [onConnect, nodes]
   );
 
-  // Handle connection dropped on empty space
+  // Define which handles each node type has
+  const getNodeHandles = useCallback((nodeType: string): { inputs: string[]; outputs: string[] } => {
+    switch (nodeType) {
+      case "imageInput":
+        return { inputs: [], outputs: ["image"] };
+      case "annotation":
+        return { inputs: ["image"], outputs: ["image"] };
+      case "prompt":
+        return { inputs: [], outputs: ["text"] };
+      case "nanoBanana":
+        return { inputs: ["image", "text"], outputs: ["image"] };
+      case "llmGenerate":
+        return { inputs: ["text", "image"], outputs: ["text"] };
+      case "output":
+        return { inputs: ["image"], outputs: [] };
+      default:
+        return { inputs: [], outputs: [] };
+    }
+  }, []);
+
+  // Handle connection dropped on empty space or on a node
   const handleConnectEnd: OnConnectEnd = useCallback(
     (event, connectionState) => {
-      // Only show menu if connection was not completed (dropped on empty space)
-      if (!connectionState.isValid && connectionState.fromNode) {
-        const { clientX, clientY } = event as MouseEvent;
-
-        // Get the handle type from the connection state
-        const handleId = connectionState.fromHandle?.id || null;
-        const handleType = (handleId === "image" || handleId === "text") ? handleId : null;
-
-        // Determine if we're dragging from a source or target handle
-        const connectionType = connectionState.fromHandle?.type === "source" ? "source" : "target";
-
-        const flowPos = screenToFlowPosition({ x: clientX, y: clientY });
-
-        setConnectionDrop({
-          position: { x: clientX, y: clientY },
-          flowPosition: flowPos,
-          handleType,
-          connectionType,
-          sourceNodeId: connectionState.fromNode.id,
-          sourceHandleId: handleId,
-        });
+      // If connection was completed normally, nothing to do
+      if (connectionState.isValid || !connectionState.fromNode) {
+        return;
       }
+
+      const { clientX, clientY } = event as MouseEvent;
+      const fromHandleId = connectionState.fromHandle?.id || null;
+      const fromHandleType = (fromHandleId === "image" || fromHandleId === "text") ? fromHandleId : null;
+      const isFromSource = connectionState.fromHandle?.type === "source";
+
+      // Check if we dropped on a node by looking for node elements under the cursor
+      const elementsUnderCursor = document.elementsFromPoint(clientX, clientY);
+      const nodeElement = elementsUnderCursor.find((el) => {
+        // React Flow nodes have data-id attribute
+        return el.closest(".react-flow__node");
+      });
+
+      if (nodeElement) {
+        const nodeWrapper = nodeElement.closest(".react-flow__node") as HTMLElement;
+        const targetNodeId = nodeWrapper?.dataset.id;
+
+        if (targetNodeId && targetNodeId !== connectionState.fromNode.id && fromHandleType) {
+          const targetNode = nodes.find((n) => n.id === targetNodeId);
+
+          if (targetNode) {
+            const targetHandles = getNodeHandles(targetNode.type || "");
+
+            // Find a compatible handle on the target node
+            let compatibleHandle: string | null = null;
+
+            if (isFromSource) {
+              // Dragging from output, need an input on target that matches type
+              if (targetHandles.inputs.includes(fromHandleType)) {
+                compatibleHandle = fromHandleType;
+              }
+            } else {
+              // Dragging from input, need an output on target that matches type
+              if (targetHandles.outputs.includes(fromHandleType)) {
+                compatibleHandle = fromHandleType;
+              }
+            }
+
+            if (compatibleHandle) {
+              // Create the connection
+              const connection: Connection = isFromSource
+                ? {
+                    source: connectionState.fromNode.id,
+                    sourceHandle: fromHandleId,
+                    target: targetNodeId,
+                    targetHandle: compatibleHandle,
+                  }
+                : {
+                    source: targetNodeId,
+                    sourceHandle: compatibleHandle,
+                    target: connectionState.fromNode.id,
+                    targetHandle: fromHandleId,
+                  };
+
+              if (isValidConnection(connection)) {
+                handleConnect(connection);
+                return; // Connection made, don't show menu
+              }
+            }
+          }
+        }
+      }
+
+      // No node under cursor or no compatible handle - show the drop menu
+      const flowPos = screenToFlowPosition({ x: clientX, y: clientY });
+
+      setConnectionDrop({
+        position: { x: clientX, y: clientY },
+        flowPosition: flowPos,
+        handleType: fromHandleType,
+        connectionType: isFromSource ? "source" : "target",
+        sourceNodeId: connectionState.fromNode.id,
+        sourceHandleId: fromHandleId,
+      });
     },
-    [screenToFlowPosition]
+    [screenToFlowPosition, nodes, getNodeHandles, handleConnect]
   );
 
   // Handle node selection from drop menu
@@ -247,7 +324,10 @@ function WorkflowCanvasInner() {
     setConnectionDrop(null);
   }, []);
 
-  // Keyboard shortcuts for stacking selected nodes
+  // Get copy/paste functions from store
+  const { copySelectedNodes, pasteNodes } = useWorkflowStore();
+
+  // Keyboard shortcuts for copy/paste and stacking selected nodes
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       // Ignore if user is typing in an input field
@@ -255,6 +335,20 @@ function WorkflowCanvasInner() {
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement
       ) {
+        return;
+      }
+
+      // Handle copy (Ctrl/Cmd + C)
+      if ((event.ctrlKey || event.metaKey) && event.key === "c") {
+        event.preventDefault();
+        copySelectedNodes();
+        return;
+      }
+
+      // Handle paste (Ctrl/Cmd + V)
+      if ((event.ctrlKey || event.metaKey) && event.key === "v") {
+        event.preventDefault();
+        pasteNodes();
         return;
       }
 
@@ -312,7 +406,7 @@ function WorkflowCanvasInner() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [nodes, onNodesChange]);
+  }, [nodes, onNodesChange, copySelectedNodes, pasteNodes]);
 
   const handleDragOver = useCallback((event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
@@ -514,6 +608,9 @@ function WorkflowCanvasInner() {
 
       {/* Multi-select toolbar */}
       <MultiSelectToolbar />
+
+      {/* Edge toolbar */}
+      <EdgeToolbar />
     </div>
   );
 }

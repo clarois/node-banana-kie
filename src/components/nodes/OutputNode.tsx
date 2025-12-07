@@ -41,7 +41,7 @@ export function OutputNode({ id, data, selected }: NodeProps<OutputNodeType>) {
               <img
                 src={nodeData.image}
                 alt="Output"
-                className="w-full h-full object-cover rounded"
+                className="w-full h-full object-contain rounded"
               />
               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center rounded">
                 <span className="text-[10px] font-medium text-white opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 px-2 py-1 rounded">

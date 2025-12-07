@@ -103,7 +103,7 @@ export function NanoBananaNode({ id, data, selected }: NodeProps<NanoBananaNodeT
             <img
               src={nodeData.outputImage}
               alt="Generated"
-              className="w-full h-full object-cover rounded"
+              className="w-full h-full object-contain rounded"
             />
             {/* Loading overlay */}
             {nodeData.status === "loading" && (

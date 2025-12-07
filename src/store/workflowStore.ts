@@ -20,6 +20,7 @@ import {
   OutputNodeData,
   WorkflowNodeData,
 } from "@/types";
+import { useToast } from "@/components/Toast";
 
 export type EdgeStyle = "angular" | "curved";
 
@@ -32,10 +33,17 @@ export interface WorkflowFile {
   edgeStyle: EdgeStyle;
 }
 
+// Clipboard data structure for copy/paste
+interface ClipboardData {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
+
 interface WorkflowStore {
   nodes: WorkflowNode[];
   edges: WorkflowEdge[];
   edgeStyle: EdgeStyle;
+  clipboard: ClipboardData | null;
 
   // Settings
   setEdgeStyle: (style: EdgeStyle) => void;
@@ -50,11 +58,17 @@ interface WorkflowStore {
   onEdgesChange: (changes: EdgeChange<WorkflowEdge>[]) => void;
   onConnect: (connection: Connection) => void;
   removeEdge: (edgeId: string) => void;
+  toggleEdgePause: (edgeId: string) => void;
+
+  // Copy/Paste operations
+  copySelectedNodes: () => void;
+  pasteNodes: (offset?: XYPosition) => void;
 
   // Execution
   isRunning: boolean;
   currentNodeId: string | null;
-  executeWorkflow: () => Promise<void>;
+  pausedAtNodeId: string | null;
+  executeWorkflow: (startFromNodeId?: string) => Promise<void>;
   regenerateNode: (nodeId: string) => Promise<void>;
   stopWorkflow: () => void;
 
@@ -123,8 +137,10 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
   nodes: [],
   edges: [],
   edgeStyle: "curved" as EdgeStyle,
+  clipboard: null,
   isRunning: false,
   currentNodeId: null,
+  pausedAtNodeId: null,
 
   setEdgeStyle: (style: EdgeStyle) => {
     set({ edgeStyle: style });
@@ -135,12 +151,12 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
     // Default dimensions based on node type
     const defaultDimensions: Record<NodeType, { width: number; height: number }> = {
-      imageInput: { width: 220, height: 200 },
-      annotation: { width: 220, height: 200 },
-      prompt: { width: 240, height: 160 },
-      nanoBanana: { width: 220, height: 220 },
-      llmGenerate: { width: 240, height: 280 },
-      output: { width: 240, height: 240 },
+      imageInput: { width: 300, height: 280 },
+      annotation: { width: 300, height: 280 },
+      prompt: { width: 320, height: 220 },
+      nanoBanana: { width: 300, height: 300 },
+      llmGenerate: { width: 320, height: 360 },
+      output: { width: 320, height: 320 },
     };
 
     const { width, height } = defaultDimensions[type];
@@ -207,6 +223,82 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     set((state) => ({
       edges: state.edges.filter((edge) => edge.id !== edgeId),
     }));
+  },
+
+  toggleEdgePause: (edgeId: string) => {
+    set((state) => ({
+      edges: state.edges.map((edge) =>
+        edge.id === edgeId
+          ? { ...edge, data: { ...edge.data, hasPause: !edge.data?.hasPause } }
+          : edge
+      ),
+    }));
+  },
+
+  copySelectedNodes: () => {
+    const { nodes, edges } = get();
+    const selectedNodes = nodes.filter((node) => node.selected);
+
+    if (selectedNodes.length === 0) return;
+
+    const selectedNodeIds = new Set(selectedNodes.map((n) => n.id));
+
+    // Copy edges that connect selected nodes to each other
+    const connectedEdges = edges.filter(
+      (edge) => selectedNodeIds.has(edge.source) && selectedNodeIds.has(edge.target)
+    );
+
+    // Deep clone the nodes and edges to avoid reference issues
+    const clonedNodes = JSON.parse(JSON.stringify(selectedNodes)) as WorkflowNode[];
+    const clonedEdges = JSON.parse(JSON.stringify(connectedEdges)) as WorkflowEdge[];
+
+    set({ clipboard: { nodes: clonedNodes, edges: clonedEdges } });
+  },
+
+  pasteNodes: (offset: XYPosition = { x: 50, y: 50 }) => {
+    const { clipboard, nodes, edges } = get();
+
+    if (!clipboard || clipboard.nodes.length === 0) return;
+
+    // Create a mapping from old node IDs to new node IDs
+    const idMapping = new Map<string, string>();
+
+    // Generate new IDs for all pasted nodes
+    clipboard.nodes.forEach((node) => {
+      const newId = `${node.type}-${++nodeIdCounter}`;
+      idMapping.set(node.id, newId);
+    });
+
+    // Create new nodes with updated IDs and offset positions
+    const newNodes: WorkflowNode[] = clipboard.nodes.map((node) => ({
+      ...node,
+      id: idMapping.get(node.id)!,
+      position: {
+        x: node.position.x + offset.x,
+        y: node.position.y + offset.y,
+      },
+      selected: true, // Select newly pasted nodes
+      data: { ...node.data }, // Deep copy data
+    }));
+
+    // Create new edges with updated source/target IDs
+    const newEdges: WorkflowEdge[] = clipboard.edges.map((edge) => ({
+      ...edge,
+      id: `edge-${idMapping.get(edge.source)}-${idMapping.get(edge.target)}-${edge.sourceHandle || "default"}-${edge.targetHandle || "default"}`,
+      source: idMapping.get(edge.source)!,
+      target: idMapping.get(edge.target)!,
+    }));
+
+    // Deselect existing nodes and add new ones
+    const updatedNodes = nodes.map((node) => ({
+      ...node,
+      selected: false,
+    }));
+
+    set({
+      nodes: [...updatedNodes, ...newNodes] as WorkflowNode[],
+      edges: [...edges, ...newEdges],
+    });
   },
 
   getNodeById: (id: string) => {
@@ -282,12 +374,13 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         }
       });
 
-    // Check annotation nodes have image input
+    // Check annotation nodes have image input (either connected or manually loaded)
     nodes
       .filter((n) => n.type === "annotation")
       .forEach((node) => {
         const imageConnected = edges.some((e) => e.target === node.id);
-        if (!imageConnected) {
+        const hasManualImage = (node.data as AnnotationNodeData).sourceImage !== null;
+        if (!imageConnected && !hasManualImage) {
           errors.push(`Annotation node "${node.id}" missing image input`);
         }
       });
@@ -305,7 +398,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     return { valid: errors.length === 0, errors };
   },
 
-  executeWorkflow: async () => {
+  executeWorkflow: async (startFromNodeId?: string) => {
     const { nodes, edges, updateNodeData, getConnectedInputs, isRunning } = get();
 
     if (isRunning) {
@@ -314,7 +407,11 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     }
 
     console.log(`[Workflow] ========== STARTING WORKFLOW EXECUTION ==========`);
-    set({ isRunning: true });
+    const isResuming = startFromNodeId === get().pausedAtNodeId;
+    if (startFromNodeId) {
+      console.log(`[Workflow] Starting from node: ${startFromNodeId}${isResuming ? ' (resuming from pause)' : ''}`);
+    }
+    set({ isRunning: true, pausedAtNodeId: null });
 
     // Topological sort
     const sorted: WorkflowNode[] = [];
@@ -344,9 +441,35 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     try {
       nodes.forEach((node) => visit(node.id));
 
-      // Execute nodes in order
-      for (const node of sorted) {
+      // If starting from a specific node, find its index and skip earlier nodes
+      let startIndex = 0;
+      if (startFromNodeId) {
+        const nodeIndex = sorted.findIndex((n) => n.id === startFromNodeId);
+        if (nodeIndex !== -1) {
+          startIndex = nodeIndex;
+          console.log(`[Workflow] Skipping ${startIndex} nodes, starting at index ${startIndex}`);
+        } else {
+          console.warn(`[Workflow] Start node ${startFromNodeId} not found in sorted list`);
+        }
+      }
+
+      // Execute nodes in order, starting from startIndex
+      for (let i = startIndex; i < sorted.length; i++) {
+        const node = sorted[i];
         if (!get().isRunning) break;
+
+        // Check for pause edges on incoming connections (skip if resuming from this exact node)
+        const isResumingThisNode = isResuming && node.id === startFromNodeId;
+        if (!isResumingThisNode) {
+          const incomingEdges = edges.filter((e) => e.target === node.id);
+          const pauseEdge = incomingEdges.find((e) => e.data?.hasPause);
+          if (pauseEdge) {
+            console.log(`[Workflow] ⏸ Paused at edge before node: ${node.id}`);
+            set({ pausedAtNodeId: node.id, isRunning: false, currentNodeId: null });
+            useToast.getState().show("Workflow paused - click Run to continue", "warning");
+            return;
+          }
+        }
 
         set({ currentNodeId: node.id });
 

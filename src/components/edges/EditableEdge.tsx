@@ -9,9 +9,9 @@ import {
   useReactFlow,
 } from "@xyflow/react";
 import { useWorkflowStore } from "@/store/workflowStore";
-import { NanoBananaNodeData } from "@/types";
+import { NanoBananaNodeData, WorkflowEdgeData } from "@/types";
 
-interface EdgeData {
+interface EdgeData extends WorkflowEdgeData {
   offsetX?: number;
   offsetY?: number;
 }
@@ -21,6 +21,7 @@ const EDGE_COLORS = {
   image: "#10b981", // Green for image connections
   prompt: "#3b82f6", // Blue for prompt connections
   default: "#94a3b8", // Gray for unknown
+  pause: "#f97316", // Orange for paused edges
 };
 
 export function EditableEdge({
@@ -48,6 +49,7 @@ export function EditableEdge({
   const edgeData = data as EdgeData | undefined;
   const offsetX = edgeData?.offsetX ?? 0;
   const offsetY = edgeData?.offsetY ?? 0;
+  const hasPause = edgeData?.hasPause ?? false;
 
   // Check if target node is a Generate node that's currently loading
   const isTargetLoading = useMemo(() => {
@@ -59,14 +61,15 @@ export function EditableEdge({
     return false;
   }, [target, nodes]);
 
-  // Determine edge color based on handle type
+  // Determine edge color based on handle type (orange if paused)
   const edgeColor = useMemo(() => {
+    if (hasPause) return EDGE_COLORS.pause;
     // Use source handle to determine color (or target if source is not available)
     const handleType = sourceHandleId || targetHandleId;
     if (handleType === "image") return EDGE_COLORS.image;
     if (handleType === "prompt") return EDGE_COLORS.prompt;
     return EDGE_COLORS.default;
-  }, [sourceHandleId, targetHandleId]);
+  }, [hasPause, sourceHandleId, targetHandleId]);
 
   // Generate a unique gradient ID for this edge
   const gradientId = `pulse-gradient-${id}`;
@@ -217,6 +220,23 @@ export function EditableEdge({
         stroke="transparent"
         className="react-flow__edge-interaction"
       />
+
+      {/* Pause indicator near target connection point */}
+      {hasPause && (
+        <g transform={`translate(${targetX - 24}, ${targetY})`}>
+          {/* Background circle */}
+          <circle
+            r={10}
+            fill="#27272a"
+            stroke={edgeColor}
+            strokeWidth={2}
+          />
+          {/* Pause bars */}
+          <rect x={-4} y={-5} width={2.5} height={10} fill={edgeColor} rx={1} />
+          <rect x={1.5} y={-5} width={2.5} height={10} fill={edgeColor} rx={1} />
+        </g>
+      )}
+
       {/* Draggable handles on segments */}
       {(selected || isDragging) &&
         handlePositions.map((handle, index) => (

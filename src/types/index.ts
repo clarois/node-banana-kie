@@ -148,8 +148,13 @@ export type WorkflowNodeData =
 // Workflow Node with typed data
 export type WorkflowNode = Node<WorkflowNodeData, NodeType>;
 
+// Workflow Edge Data
+export interface WorkflowEdgeData extends Record<string, unknown> {
+  hasPause?: boolean;
+}
+
 // Workflow Edge
-export type WorkflowEdge = Edge;
+export type WorkflowEdge = Edge<WorkflowEdgeData>;
 
 // Handle Types for connections
 export type HandleType = "image" | "text";

@@ -53,6 +53,7 @@ export function AnnotationModal() {
 
   const stageRef = useRef<Konva.Stage>(null);
   const transformerRef = useRef<Konva.Transformer>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
   const [scale, setScale] = useState(1);
@@ -61,6 +62,9 @@ export function AnnotationModal() {
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
   const [currentShape, setCurrentShape] = useState<AnnotationShape | null>(null);
   const [editingTextId, setEditingTextId] = useState<string | null>(null);
+  const [textInputPosition, setTextInputPosition] = useState<{ x: number; y: number } | null>(null);
+  const [pendingTextPosition, setPendingTextPosition] = useState<{ x: number; y: number } | null>(null);
+  const textInputCreatedAt = useRef<number>(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -109,6 +113,8 @@ export function AnnotationModal() {
       if (e.key === "Escape") {
         if (editingTextId) {
           setEditingTextId(null);
+          setTextInputPosition(null);
+          setPendingTextPosition(null);
         } else {
           closeModal();
         }
@@ -176,17 +182,30 @@ export function AnnotationModal() {
         case "freehand":
           newShape = { ...baseShape, type: "freehand", points: [0, 0] } as FreehandShape;
           break;
-        case "text":
-          newShape = { ...baseShape, type: "text", text: "Text", fontSize: toolOptions.fontSize, fill: toolOptions.strokeColor } as TextShape;
-          addAnnotation(newShape);
-          setEditingTextId(id);
+        case "text": {
+          // Calculate screen position for the input
+          const stage = stageRef.current;
+          if (stage) {
+            const container = stage.container();
+            const stageBox = container?.getBoundingClientRect();
+            if (stageBox) {
+              const screenX = stageBox.left + pos.x * scale + position.x;
+              const screenY = stageBox.top + pos.y * scale + position.y;
+              setTextInputPosition({ x: screenX, y: screenY });
+              setPendingTextPosition({ x: pos.x, y: pos.y });
+            }
+          }
+          textInputCreatedAt.current = Date.now();
+          setEditingTextId("new");
           setIsDrawing(false);
+          setTimeout(() => textInputRef.current?.focus(), 0);
           return;
+        }
       }
 
       if (newShape) setCurrentShape(newShape);
     },
-    [currentTool, toolOptions, getRelativePointerPosition, selectShape, addAnnotation]
+    [currentTool, toolOptions, getRelativePointerPosition, selectShape, addAnnotation, scale, position]
   );
 
   const handleMouseMove = useCallback(() => {
@@ -336,7 +355,44 @@ export function AnnotationModal() {
       }
       case "text": {
         const text = shape as TextShape;
-        return <Text key={shape.id} {...commonProps} x={text.x} y={text.y} text={text.text} fontSize={text.fontSize} fill={text.fill} onDblClick={() => { if (currentTool === "select") setEditingTextId(shape.id); }} />;
+        return (
+          <Text
+            key={shape.id}
+            {...commonProps}
+            x={text.x}
+            y={text.y}
+            text={text.text || " "}
+            fontSize={text.fontSize}
+            fill={text.fill}
+            onTransformEnd={(e) => {
+              const node = e.target;
+              const scaleX = node.scaleX();
+              const scaleY = node.scaleY();
+              // Reset scale and apply it to fontSize instead
+              node.scaleX(1);
+              node.scaleY(1);
+              const newFontSize = Math.round(text.fontSize * Math.max(scaleX, scaleY));
+              updateAnnotation(shape.id, {
+                x: node.x(),
+                y: node.y(),
+                fontSize: newFontSize,
+              });
+            }}
+            onDblClick={() => {
+              if (currentTool === "select") {
+                const stage = stageRef.current;
+                if (stage) {
+                  const stageBox = stage.container().getBoundingClientRect();
+                  const screenX = stageBox.left + text.x * scale + position.x;
+                  const screenY = stageBox.top + text.y * scale + position.y;
+                  setTextInputPosition({ x: screenX, y: screenY });
+                }
+                setEditingTextId(shape.id);
+                setTimeout(() => textInputRef.current?.focus(), 0);
+              }
+            }}
+          />
+        );
       }
     }
   };
@@ -355,13 +411,13 @@ export function AnnotationModal() {
   return (
     <div className="fixed inset-0 z-[100] bg-neutral-950 flex flex-col">
       {/* Top Bar */}
-      <div className="h-10 bg-neutral-900 flex items-center justify-between px-3 border-b border-neutral-800">
-        <div className="flex items-center gap-1">
+      <div className="h-14 bg-neutral-900 flex items-center justify-between px-4 border-b border-neutral-800">
+        <div className="flex items-center gap-1.5">
           {tools.map((tool) => (
             <button
               key={tool.type}
               onClick={() => setCurrentTool(tool.type)}
-              className={`px-2.5 py-1 text-[10px] font-medium rounded transition-colors ${
+              className={`px-3.5 py-1.5 text-xs font-medium rounded transition-colors ${
                 currentTool === tool.type
                   ? "bg-white text-neutral-900"
                   : "text-neutral-400 hover:text-white"
@@ -371,21 +427,21 @@ export function AnnotationModal() {
             </button>
           ))}
 
-          <div className="w-px h-4 bg-neutral-700 mx-2" />
+          <div className="w-px h-6 bg-neutral-700 mx-3" />
 
-          <button onClick={undo} className="px-2 py-1 text-[10px] text-neutral-400 hover:text-white">Undo</button>
-          <button onClick={redo} className="px-2 py-1 text-[10px] text-neutral-400 hover:text-white">Redo</button>
+          <button onClick={undo} className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white">Undo</button>
+          <button onClick={redo} className="px-3 py-1.5 text-xs text-neutral-400 hover:text-white">Redo</button>
 
-          <div className="w-px h-4 bg-neutral-700 mx-2" />
+          <div className="w-px h-6 bg-neutral-700 mx-3" />
 
-          <button onClick={clearAnnotations} className="px-2 py-1 text-[10px] text-neutral-400 hover:text-red-400">Clear</button>
+          <button onClick={clearAnnotations} className="px-3 py-1.5 text-xs text-neutral-400 hover:text-red-400">Clear</button>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button onClick={closeModal} className="px-3 py-1 text-[10px] font-medium text-neutral-400 hover:text-white">
+        <div className="flex items-center gap-3">
+          <button onClick={closeModal} className="px-4 py-1.5 text-xs font-medium text-neutral-400 hover:text-white">
             Cancel
           </button>
-          <button onClick={handleDone} className="px-3 py-1 text-[10px] font-medium bg-white text-neutral-900 rounded hover:bg-neutral-200">
+          <button onClick={handleDone} className="px-4 py-1.5 text-xs font-medium bg-white text-neutral-900 rounded hover:bg-neutral-200">
             Done
           </button>
         </div>
@@ -419,32 +475,32 @@ export function AnnotationModal() {
       </div>
 
       {/* Bottom Options Bar */}
-      <div className="h-10 bg-neutral-900 flex items-center justify-center gap-4 px-3 border-t border-neutral-800">
+      <div className="h-14 bg-neutral-900 flex items-center justify-center gap-6 px-4 border-t border-neutral-800">
         {/* Colors */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] text-neutral-500 uppercase tracking-wide mr-1">Color</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-neutral-500 uppercase tracking-wide mr-1">Color</span>
           {COLORS.map((color) => (
             <button
               key={color}
               onClick={() => setToolOptions({ strokeColor: color })}
-              className={`w-4 h-4 rounded-full transition-transform ${
-                toolOptions.strokeColor === color ? "ring-1 ring-white ring-offset-1 ring-offset-neutral-900 scale-110" : "hover:scale-105"
+              className={`w-6 h-6 rounded-full transition-transform ${
+                toolOptions.strokeColor === color ? "ring-2 ring-white ring-offset-2 ring-offset-neutral-900 scale-110" : "hover:scale-105"
               }`}
               style={{ backgroundColor: color }}
             />
           ))}
         </div>
 
-        <div className="w-px h-4 bg-neutral-700" />
+        <div className="w-px h-6 bg-neutral-700" />
 
         {/* Stroke Width */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[9px] text-neutral-500 uppercase tracking-wide mr-1">Size</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-neutral-500 uppercase tracking-wide mr-1">Size</span>
           {STROKE_WIDTHS.map((width) => (
             <button
               key={width}
               onClick={() => setToolOptions({ strokeWidth: width })}
-              className={`w-6 h-6 rounded flex items-center justify-center transition-colors ${
+              className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
                 toolOptions.strokeWidth === width ? "bg-neutral-700" : "hover:bg-neutral-800"
               }`}
             >
@@ -453,12 +509,12 @@ export function AnnotationModal() {
           ))}
         </div>
 
-        <div className="w-px h-4 bg-neutral-700" />
+        <div className="w-px h-6 bg-neutral-700" />
 
         {/* Fill Toggle */}
         <button
           onClick={() => setToolOptions({ fillColor: toolOptions.fillColor ? null : toolOptions.strokeColor })}
-          className={`px-2 py-1 text-[9px] uppercase tracking-wide rounded transition-colors ${
+          className={`px-3 py-1.5 text-[10px] uppercase tracking-wide rounded transition-colors ${
             toolOptions.fillColor ? "bg-neutral-700 text-white" : "text-neutral-500 hover:text-white"
           }`}
         >
@@ -466,42 +522,106 @@ export function AnnotationModal() {
         </button>
 
         {/* Zoom */}
-        <div className="flex items-center gap-1 ml-auto">
-          <button onClick={() => setScale(Math.max(scale - 0.1, 0.1))} className="w-5 h-5 rounded text-neutral-400 hover:text-white text-xs">-</button>
-          <span className="text-[9px] text-neutral-400 w-8 text-center">{Math.round(scale * 100)}%</span>
-          <button onClick={() => setScale(Math.min(scale + 0.1, 5))} className="w-5 h-5 rounded text-neutral-400 hover:text-white text-xs">+</button>
+        <div className="flex items-center gap-2 ml-auto">
+          <button onClick={() => setScale(Math.max(scale - 0.1, 0.1))} className="w-7 h-7 rounded text-neutral-400 hover:text-white text-sm">-</button>
+          <span className="text-[10px] text-neutral-400 w-10 text-center">{Math.round(scale * 100)}%</span>
+          <button onClick={() => setScale(Math.min(scale + 0.1, 5))} className="w-7 h-7 rounded text-neutral-400 hover:text-white text-sm">+</button>
         </div>
       </div>
 
-      {/* Text Editing Modal */}
-      {editingTextId && (
-        <div className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center">
-          <div className="bg-white rounded-md p-3 w-72">
-            <input
-              type="text"
-              autoFocus
-              defaultValue={(annotations.find((a) => a.id === editingTextId) as TextShape)?.text || ""}
-              className="w-full px-2 py-1.5 text-sm text-gray-900 border border-gray-200 rounded mb-3 focus:outline-none focus:ring-1 focus:ring-gray-300"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") { updateAnnotation(editingTextId, { text: (e.target as HTMLInputElement).value }); setEditingTextId(null); }
-                if (e.key === "Escape") setEditingTextId(null);
-              }}
-            />
-            <div className="flex justify-end gap-2">
-              <button onClick={() => setEditingTextId(null)} className="px-2 py-1 text-[10px] text-gray-500 hover:text-gray-900">Cancel</button>
-              <button
-                onClick={() => {
-                  const input = document.querySelector('input[type="text"]') as HTMLInputElement;
-                  if (input) updateAnnotation(editingTextId, { text: input.value });
-                  setEditingTextId(null);
-                }}
-                className="px-2 py-1 text-[10px] bg-gray-900 text-white rounded hover:bg-gray-800"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
+      {/* Inline Text Input */}
+      {editingTextId && textInputPosition && (
+        <input
+          ref={textInputRef}
+          type="text"
+          autoFocus
+          defaultValue={editingTextId === "new" ? "" : (annotations.find((a) => a.id === editingTextId) as TextShape)?.text || ""}
+          className="fixed z-[110] bg-transparent border-none outline-none"
+          style={{
+            left: textInputPosition.x,
+            top: textInputPosition.y,
+            fontSize: `${toolOptions.fontSize * scale}px`,
+            color: editingTextId === "new" ? toolOptions.strokeColor : ((annotations.find((a) => a.id === editingTextId) as TextShape)?.fill || toolOptions.strokeColor),
+            minWidth: "100px",
+            caretColor: "white",
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              const value = (e.target as HTMLInputElement).value;
+              if (value.trim()) {
+                if (editingTextId === "new" && pendingTextPosition) {
+                  // Create new text annotation
+                  const newShape: TextShape = {
+                    id: `shape-${Date.now()}`,
+                    type: "text",
+                    x: pendingTextPosition.x,
+                    y: pendingTextPosition.y,
+                    text: value,
+                    fontSize: toolOptions.fontSize,
+                    fill: toolOptions.strokeColor,
+                    stroke: toolOptions.strokeColor,
+                    strokeWidth: toolOptions.strokeWidth,
+                    opacity: toolOptions.opacity,
+                  };
+                  addAnnotation(newShape);
+                } else {
+                  updateAnnotation(editingTextId, { text: value });
+                }
+              } else if (editingTextId !== "new") {
+                deleteAnnotation(editingTextId);
+              }
+              setEditingTextId(null);
+              setTextInputPosition(null);
+              setPendingTextPosition(null);
+            }
+            if (e.key === "Escape") {
+              if (editingTextId !== "new") {
+                const currentText = (annotations.find((a) => a.id === editingTextId) as TextShape)?.text;
+                if (!currentText) {
+                  deleteAnnotation(editingTextId);
+                }
+              }
+              setEditingTextId(null);
+              setTextInputPosition(null);
+              setPendingTextPosition(null);
+            }
+          }}
+          onBlur={(e) => {
+            // Ignore blur events that happen immediately after creation (within 200ms)
+            // This prevents the click that created the input from also triggering blur
+            if (Date.now() - textInputCreatedAt.current < 200) {
+              e.target.focus();
+              return;
+            }
+
+            const value = e.target.value;
+            if (value.trim()) {
+              if (editingTextId === "new" && pendingTextPosition) {
+                // Create new text annotation
+                const newShape: TextShape = {
+                  id: `shape-${Date.now()}`,
+                  type: "text",
+                  x: pendingTextPosition.x,
+                  y: pendingTextPosition.y,
+                  text: value,
+                  fontSize: toolOptions.fontSize,
+                  fill: toolOptions.strokeColor,
+                  stroke: toolOptions.strokeColor,
+                  strokeWidth: toolOptions.strokeWidth,
+                  opacity: toolOptions.opacity,
+                };
+                addAnnotation(newShape);
+              } else {
+                updateAnnotation(editingTextId, { text: value });
+              }
+            } else if (editingTextId !== "new") {
+              deleteAnnotation(editingTextId);
+            }
+            setEditingTextId(null);
+            setTextInputPosition(null);
+            setPendingTextPosition(null);
+          }}
+        />
       )}
     </div>
   );
