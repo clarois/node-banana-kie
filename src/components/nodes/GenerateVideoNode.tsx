@@ -572,6 +572,14 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps<GenerateVide
         id="video"
         data-handletype="video"
       />
+      {/* TaskId output */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="taskId"
+        data-handletype="text"
+        style={{ top: "70%" }}
+      />
       {/* Output label */}
       <div
         className="absolute text-[10px] font-medium whitespace-nowrap pointer-events-none"
@@ -583,8 +591,23 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps<GenerateVide
       >
         Video
       </div>
+      <div
+        className="absolute text-[10px] font-medium whitespace-nowrap pointer-events-none"
+        style={{
+          left: `calc(100% + 8px)`,
+          top: "calc(70% - 18px)",
+          color: "var(--handle-color-text)",
+        }}
+      >
+        TaskId
+      </div>
 
       <div className="flex-1 flex flex-col min-h-0 gap-2">
+        {nodeData.outputTaskId && (
+          <div className="text-[10px] text-neutral-400 truncate" title={nodeData.outputTaskId}>
+            TaskId: {nodeData.outputTaskId}
+          </div>
+        )}
         {/* Preview area */}
         {nodeData.outputVideo ? (
           <>

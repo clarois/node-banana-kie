@@ -26,7 +26,13 @@ import {
   PromptNode,
   PromptConstructorNode,
   GenerateImageNode,
+  NanoBananaNode,
   GenerateVideoNode,
+  SoraStoryboardNode,
+  VeoReferenceVideoNode,
+  VeoExtendVideoNode,
+  Veo1080pVideoNode,
+  Veo4kVideoNode,
   LLMGenerateNode,
   SplitGridNode,
   OutputNode,
@@ -34,6 +40,7 @@ import {
   ImageCompareNode,
   VideoStitchNode,
   EaseCurveNode,
+  GroupNode,
 } from "./nodes";
 import { EditableEdge, ReferenceEdge } from "./edges";
 import { ConnectionDropMenu, MenuAction } from "./ConnectionDropMenu";
@@ -57,8 +64,13 @@ const nodeTypes: NodeTypes = {
   annotation: AnnotationNode,
   prompt: PromptNode,
   promptConstructor: PromptConstructorNode,
-  nanoBanana: GenerateImageNode,
+  nanoBanana: NanoBananaNode,
   generateVideo: GenerateVideoNode,
+  soraStoryboard: SoraStoryboardNode,
+  veoReferenceVideo: VeoReferenceVideoNode,
+  veoExtendVideo: VeoExtendVideoNode,
+  veo1080pVideo: Veo1080pVideoNode,
+  veo4kVideo: Veo4kVideoNode,
   llmGenerate: LLMGenerateNode,
   splitGrid: SplitGridNode,
   output: OutputNode,
@@ -66,6 +78,7 @@ const nodeTypes: NodeTypes = {
   imageCompare: ImageCompareNode,
   videoStitch: VideoStitchNode,
   easeCurve: EaseCurveNode,
+  group: GroupNode,
 };
 
 const edgeTypes: EdgeTypes = {
@@ -86,11 +99,11 @@ const getHandleType = (handleId: string | null | undefined): "image" | "text" | 
   // Standard handles
   if (handleId === "video") return "video";
   if (handleId === "audio" || handleId.startsWith("audio")) return "audio";
-  if (handleId === "image" || handleId === "text") return handleId;
+  if (handleId === "image" || handleId === "text" || handleId === "taskId") return handleId === "image" ? "image" : "text";
   // Dynamic handles - check naming patterns (including indexed: text-0, image-0)
   if (handleId.includes("video")) return "video";
   if (handleId.startsWith("image-") || handleId.includes("image") || handleId.includes("frame")) return "image";
-  if (handleId.startsWith("text-") || handleId === "prompt" || handleId === "negative_prompt" || handleId.includes("prompt")) return "text";
+  if (handleId.startsWith("text-") || handleId === "prompt" || handleId === "negative_prompt" || handleId.includes("prompt") || handleId.includes("task")) return "text";
   return null;
 };
 
@@ -110,7 +123,15 @@ const getNodeHandles = (nodeType: string): { inputs: string[]; outputs: string[]
     case "nanoBanana":
       return { inputs: ["image", "text"], outputs: ["image"] };
     case "generateVideo":
-      return { inputs: ["image", "text"], outputs: ["video"] };
+      return { inputs: ["image", "text"], outputs: ["video", "taskId"] };
+    case "veoReferenceVideo":
+      return { inputs: ["image", "text"], outputs: ["video", "taskId"] };
+    case "veoExtendVideo":
+      return { inputs: ["taskId", "text"], outputs: ["video", "taskId"] };
+    case "veo1080pVideo":
+      return { inputs: ["taskId"], outputs: ["video", "taskId"] };
+    case "veo4kVideo":
+      return { inputs: ["taskId"], outputs: ["video", "taskId"] };
     case "llmGenerate":
       return { inputs: ["text", "image"], outputs: ["text"] };
     case "splitGrid":
@@ -789,12 +810,14 @@ export function WorkflowCanvas() {
           sourceHandleIdForNewNode = "image";
         }
       } else if (handleType === "text") {
-        if (nodeType === "nanoBanana" || nodeType === "generateVideo" || nodeType === "llmGenerate") {
+        if (nodeType === "nanoBanana" || nodeType === "generateVideo" || nodeType === "llmGenerate" || nodeType === "veoReferenceVideo") {
           targetHandleId = "text";
           // llmGenerate also has a text output
           if (nodeType === "llmGenerate") {
             sourceHandleIdForNewNode = "text";
           }
+        } else if (nodeType === "veoExtendVideo" || nodeType === "veo1080pVideo" || nodeType === "veo4kVideo") {
+          targetHandleId = "taskId";
         } else if (nodeType === "prompt" || nodeType === "promptConstructor") {
           // prompt and promptConstructor can receive and output text
           targetHandleId = "text";
@@ -1042,6 +1065,11 @@ export function WorkflowCanvas() {
             promptConstructor: { width: 340, height: 280 },
             nanoBanana: { width: 300, height: 300 },
             generateVideo: { width: 300, height: 300 },
+            soraStoryboard: { width: 400, height: 480 },
+            veoReferenceVideo: { width: 320, height: 300 },
+            veoExtendVideo: { width: 320, height: 280 },
+            veo1080pVideo: { width: 300, height: 240 },
+            veo4kVideo: { width: 300, height: 240 },
             llmGenerate: { width: 320, height: 360 },
             splitGrid: { width: 300, height: 320 },
             output: { width: 320, height: 320 },
@@ -1589,6 +1617,8 @@ export function WorkflowCanvas() {
                 return "#22c55e";
               case "generateVideo":
                 return "#9333ea";
+              case "soraStoryboard":
+                return "#6366f1"; // indigo-500
               case "llmGenerate":
                 return "#06b6d4";
               case "splitGrid":

@@ -7,6 +7,11 @@ import {
   PromptConstructorNodeData,
   NanoBananaNodeData,
   GenerateVideoNodeData,
+  VeoReferenceVideoNodeData,
+  VeoExtendVideoNodeData,
+  Veo1080pVideoNodeData,
+  Veo4kVideoNodeData,
+  SoraStoryboardNodeData,
   LLMGenerateNodeData,
   SplitGridNodeData,
   OutputNodeData,
@@ -31,6 +36,11 @@ export const defaultNodeDimensions: Record<NodeType, { width: number; height: nu
   promptConstructor: { width: 340, height: 280 },
   nanoBanana: { width: 300, height: 300 },
   generateVideo: { width: 300, height: 300 },
+  soraStoryboard: { width: 400, height: 480 },
+  veoReferenceVideo: { width: 320, height: 300 },
+  veoExtendVideo: { width: 320, height: 280 },
+  veo1080pVideo: { width: 300, height: 240 },
+  veo4kVideo: { width: 300, height: 240 },
   llmGenerate: { width: 320, height: 360 },
   splitGrid: { width: 300, height: 320 },
   output: { width: 320, height: 320 },
@@ -136,12 +146,68 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         inputImages: [],
         inputPrompt: null,
         outputVideo: null,
+        outputTaskId: null,
         selectedModel: nodeDefaults.generateVideo?.selectedModel,
         status: "idle",
         error: null,
         videoHistory: [],
         selectedVideoHistoryIndex: 0,
       } as GenerateVideoNodeData;
+    }
+    case "soraStoryboard":
+      return {
+        inputImage: null,
+        scenes: [
+          { id: crypto.randomUUID(), prompt: "", duration: 15 },
+        ],
+        nFrames: "15",
+        aspectRatio: "landscape",
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+      } as SoraStoryboardNodeData;
+    case "veoReferenceVideo": {
+      return {
+        inputImages: [],
+        inputPrompt: null,
+        outputVideo: null,
+        outputTaskId: null,
+        parameters: {},
+        status: "idle",
+        error: null,
+      } as VeoReferenceVideoNodeData;
+    }
+    case "veoExtendVideo": {
+      return {
+        inputTaskId: null,
+        inputPrompt: null,
+        outputVideo: null,
+        outputTaskId: null,
+        parameters: {},
+        status: "idle",
+        error: null,
+      } as VeoExtendVideoNodeData;
+    }
+    case "veo1080pVideo": {
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        parameters: {},
+        status: "idle",
+        error: null,
+      } as Veo1080pVideoNodeData;
+    }
+    case "veo4kVideo": {
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        parameters: {},
+        status: "idle",
+        error: null,
+      } as Veo4kVideoNodeData;
     }
     case "llmGenerate": {
       const nodeDefaults = loadNodeDefaults();
@@ -212,5 +278,7 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         progress: 0,
         encoderSupported: null,
       } as EaseCurveNodeData;
+    default:
+      throw new Error(`Unsupported node type: ${type}`);
   }
 };

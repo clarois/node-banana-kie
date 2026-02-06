@@ -107,6 +107,8 @@ export interface GenerationOutput {
     /** Original URL if applicable (e.g., from provider CDN) */
     url?: string;
   }>;
+  /** Optional task ID for async providers */
+  taskId?: string;
   /** Error message if success is false */
   error?: string;
 }
