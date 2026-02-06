@@ -28,25 +28,22 @@ export function calculateGenerationCost(model: ModelType, resolution: Resolution
   return PRICING["nano-banana-pro"][resolution];
 }
 
-/**
- * Pricing info for external provider models
- */
 export interface ModelPricing {
   unitCost: number;
-  unit: string;  // "image", "video", "second", etc.
+  unit: string;
 }
 
-type KiePricingEntry = {
-  credits: number;
+interface KiePricingEntry {
   price: number;
-};
+}
 
 function inferKieUnit(modelId: string): string {
-  const id = modelId.toLowerCase();
-  if (id.includes("token_base_score")) return "token";
-  if (id.includes("audio") || id.includes("sound")) return "audio";
-  if (id.includes("video") || id.includes("t2v") || id.includes("i2v") || id.includes("v2v")) {
+  const mid = modelId.toLowerCase();
+  if (mid.includes("video") || mid.includes("sora") || mid.includes("luma") || mid.includes("runway") || mid.includes("kling") || mid.includes("veo")) {
     return "video";
+  }
+  if (mid.includes("chat") || mid.includes("reasoner") || mid.includes("token") || mid.includes("llm") || mid.includes("deepseek")) {
+    return "token";
   }
   return "image";
 }
@@ -159,6 +156,15 @@ const KIE_MODEL_ALIASES: Record<string, string[]> = {
   "veo3/image-to-video": ["veo-video-generate", "veo-video-generate_9:16"],
   "veo3-fast/text-to-video": ["veo-video-fast-generate", "veo-video-fast-generate_9:16"],
   "veo3-fast/image-to-video": ["veo-video-fast-generate", "veo-video-fast-generate_9:16"],
+  "veo3-fast/reference-to-video": ["veo-video-fast-generate", "veo-video-fast-generate_9:16"],
+  "veo3/extend-video": ["veo-video-extend"],
+  "veo3/get-1080p-video": ["veo-get-1080p-video"],
+  "veo3/get-4k-video": ["veo-get-4k-video"],
+  "sora-2-pro-storyboard": [
+    "Market_SORA2-PRO-STORYBOARD_standard_15",
+    "Market_SORA2-PRO-STORYBOARD_standard_10",
+    "Market_SORA2-PRO-STORYBOARD_standard_25",
+  ],
 };
 
 function getKiePricing(modelId: string): ModelPricing | null {
@@ -176,10 +182,6 @@ function getKiePricing(modelId: string): ModelPricing | null {
   return null;
 }
 
-/**
- * Get cost info from ProviderModel pricing field
- * Returns null if pricing is unavailable (e.g., Replicate has no pricing API)
- */
 export function getModelCost(pricing: { type: 'per-run' | 'per-second'; amount: number } | null | undefined): ModelPricing | null {
   if (!pricing) return null;
   return {
@@ -212,38 +214,16 @@ export interface PredictedCostResult {
 }
 
 /**
- * Legacy cost breakdown item for backward compatibility
- * @deprecated Use CostBreakdownItem instead
- */
-export interface LegacyCostBreakdownItem {
-  model: ModelType;
-  resolution: Resolution;
-  count: number;
-  unitCost: number;
-  subtotal: number;
-}
-
-/**
  * Calculate predicted cost for all generation nodes in the workflow.
- * Handles nanoBanana (image) and generateVideo (video) nodes.
- *
- * @param nodes - Workflow nodes to analyze
- * @param modelPricing - Optional map of modelId -> pricing for external providers.
- *                       If not provided, only Gemini models get pricing.
- * @returns PredictedCostResult with total cost, breakdown, and counts
  */
 export function calculatePredictedCost(
   nodes: WorkflowNode[],
   modelPricing?: Map<string, ModelPricing>
 ): PredictedCostResult {
-  // Group by provider + modelId for breakdown
   const breakdown: Map<string, CostBreakdownItem> = new Map();
   let nodeCount = 0;
   let unknownPricingCount = 0;
 
-  /**
-   * Helper to add an item to the breakdown map
-   */
   function addToBreakdown(
     provider: ProviderType,
     modelId: string,
@@ -276,21 +256,15 @@ export function calculatePredictedCost(
     }
   }
 
-  /**
-   * Get pricing for a model.
-   * First checks modelPricing map, then falls back to hardcoded Gemini pricing.
-   */
   function getPricing(
     provider: ProviderType,
     modelId: string,
     resolution?: Resolution
   ): { unitCost: number; unit: string } | null {
-    // Check external pricing map first
     if (modelPricing?.has(modelId)) {
       return modelPricing.get(modelId)!;
     }
 
-    // Fallback to hardcoded Gemini pricing for legacy models
     if (provider === "gemini") {
       if (modelId === "nano-banana" || modelId === "gemini-2.5-flash-preview-image-generation") {
         return { unitCost: PRICING["nano-banana"]["1K"], unit: "image" };
@@ -301,90 +275,124 @@ export function calculatePredictedCost(
       }
     }
 
-    // Kie.ai pricing (static map from pricing_data.md)
     if (provider === "kie") {
       const pricing = getKiePricing(modelId);
-      if (pricing) {
-        return pricing;
-      }
+      if (pricing) return pricing;
     }
 
-    // No pricing available (e.g., Replicate)
     return null;
   }
 
   nodes.forEach((node) => {
-    // Handle nanoBanana (image generation) nodes
-    if (node.type === "nanoBanana") {
-      const data = node.data as NanoBananaNodeData;
+    try {
+      const data = (node.data || {}) as any;
 
-      // Determine provider and model info
-      let provider: ProviderType;
-      let modelId: string;
-      let modelName: string;
+      if (node.type === "nanoBanana") {
+        let provider: ProviderType;
+        let modelId: string;
+        let modelName: string;
 
-      if (data.selectedModel) {
-        // New multi-provider model selection
-        provider = data.selectedModel.provider;
-        modelId = data.selectedModel.modelId;
-        modelName = data.selectedModel.displayName;
-      } else {
-        // Legacy Gemini-only model
-        provider = "gemini";
-        modelId = data.model;
-        modelName = data.model === "nano-banana" ? "Nano Banana" : "Nano Banana Pro";
+        if (data.selectedModel) {
+          provider = data.selectedModel.provider;
+          modelId = data.selectedModel.modelId;
+          modelName = data.selectedModel.displayName;
+        } else {
+          provider = "gemini";
+          modelId = data.model || "nano-banana";
+          modelName = modelId === "nano-banana" ? "Nano Banana" : "Nano Banana Pro";
+        }
+
+        const resolution = (modelId === "nano-banana" ? "1K" : data.resolution) || "1K";
+        const pricing = getPricing(provider, modelId, resolution as Resolution);
+        addToBreakdown(provider, modelId, modelName, pricing?.unit ?? "image", pricing?.unitCost ?? null);
       }
 
-      const resolution = data.model === "nano-banana" ? "1K" : data.resolution;
-      const pricing = getPricing(provider, modelId, resolution);
-      const unitCost = pricing?.unitCost ?? null;
-      const unit = pricing?.unit ?? "image";
+      if (node.type === "generateVideo") {
+        let provider: ProviderType = "kie";
+        let modelId = "";
+        let modelName = "";
 
-      addToBreakdown(provider, modelId, modelName, unit, unitCost);
-    }
-
-    // Handle generateVideo nodes
-    if (node.type === "generateVideo") {
-      const data = node.data as GenerateVideoNodeData;
-
-      // generateVideo requires selectedModel (no legacy fallback)
-      if (data.selectedModel) {
-        const provider = data.selectedModel.provider;
-        const modelId = data.selectedModel.modelId;
-        const modelName = data.selectedModel.displayName;
+        if (data.selectedModel) {
+          provider = data.selectedModel.provider;
+          modelId = data.selectedModel.modelId;
+          modelName = data.selectedModel.displayName;
+        } else {
+          modelId = data.model || "";
+          modelName = modelId || "Video Generation";
+        }
 
         const pricing = getPricing(provider, modelId);
-        const unitCost = pricing?.unitCost ?? null;
-        const unit = pricing?.unit ?? "video";
-
-        addToBreakdown(provider, modelId, modelName, unit, unitCost);
+        addToBreakdown(provider, modelId, modelName, pricing?.unit ?? "video", pricing?.unitCost ?? null);
       }
-    }
 
-    // SplitGrid nodes create child nanoBanana nodes - count those from settings
-    // Note: child nodes are in the nodes array, but we count from splitGrid settings
-    // to show what WILL be generated when the grid runs
-    if (node.type === "splitGrid") {
-      const data = node.data as SplitGridNodeData;
-      if (data.isConfigured && data.targetCount > 0) {
-        const model = data.generateSettings.model;
-        const resolution = model === "nano-banana" ? "1K" : data.generateSettings.resolution;
-        const modelName = model === "nano-banana" ? "Nano Banana" : "Nano Banana Pro";
+      if (node.type === "llmGenerate") {
+        let provider: ProviderType = "kie";
+        let modelId = "";
+        let modelName = "";
 
-        const pricing = getPricing("gemini", model, resolution);
-        const unitCost = pricing?.unitCost ?? null;
-        const unit = pricing?.unit ?? "image";
+        if (data.selectedModel) {
+          provider = data.selectedModel.provider;
+          modelId = data.selectedModel.modelId;
+          modelName = data.selectedModel.displayName;
+        } else {
+          modelId = data.model || "deepseek-chat";
+          modelName = modelId;
+        }
 
-        addToBreakdown("gemini", model, modelName, unit, unitCost, data.targetCount);
+        const pricing = getPricing(provider, modelId);
+        addToBreakdown(provider, modelId, modelName, pricing?.unit ?? "token", pricing?.unitCost ?? null);
       }
+
+      if (node.type === "soraStoryboard") {
+        const provider = "kie";
+        const modelId = "sora-2-pro-storyboard";
+        const modelName = "Sora 2 Pro Storyboard";
+
+        const durationSuffix = data.nFrames ? `_${data.nFrames}` : "_15";
+        const specificId = `Market_SORA2-PRO-STORYBOARD_standard${durationSuffix}`;
+        let pricing: ModelPricing | null = KIE_MODEL_PRICING.get(specificId) || null;
+
+        if (!pricing) {
+          pricing = getPricing(provider, modelId);
+        }
+
+        addToBreakdown(provider, modelId, modelName, pricing?.unit ?? "video", pricing?.unitCost ?? null);
+      }
+
+      if (node.type === "veoReferenceVideo") {
+        const pricing = getPricing("kie", "veo3-fast/reference-to-video");
+        addToBreakdown("kie", "veo3-fast/reference-to-video", "Veo 3 Reference", pricing?.unit ?? "video", pricing?.unitCost ?? null);
+      }
+      if (node.type === "veoExtendVideo") {
+        const pricing = getPricing("kie", "veo3/extend-video");
+        addToBreakdown("kie", "veo3/extend-video", "Veo 3 Extend", pricing?.unit ?? "video", pricing?.unitCost ?? null);
+      }
+      if (node.type === "veo1080pVideo") {
+        const pricing = getPricing("kie", "veo3/get-1080p-video");
+        addToBreakdown("kie", "veo3/get-1080p-video", "Veo 3 1080p", pricing?.unit ?? "video", pricing?.unitCost ?? null);
+      }
+      if (node.type === "veo4kVideo") {
+        const pricing = getPricing("kie", "veo3/get-4k-video");
+        addToBreakdown("kie", "veo3/get-4k-video", "Veo 3 4K", pricing?.unit ?? "video", pricing?.unitCost ?? null);
+      }
+
+      if (node.type === "splitGrid") {
+        if (data.isConfigured && data.targetCount > 0 && data.generateSettings) {
+          const model = data.generateSettings.model;
+          const resolution = (model === "nano-banana" ? "1K" : data.generateSettings.resolution) || "1K";
+          const modelName = model === "nano-banana" ? "Nano Banana" : "Nano Banana Pro";
+
+          const pricing = getPricing("gemini", model, resolution as Resolution);
+          addToBreakdown("gemini", model, modelName, pricing?.unit ?? "image", pricing?.unitCost ?? null, data.targetCount);
+        }
+      }
+    } catch (err) {
+      console.error("Error calculating cost for node:", node.id, err);
     }
   });
 
   const breakdownArray = Array.from(breakdown.values());
-  const totalCost = breakdownArray.reduce(
-    (sum, item) => sum + (item.subtotal ?? 0),
-    0
-  );
+  const totalCost = breakdownArray.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
 
   return {
     totalCost,
@@ -424,10 +432,7 @@ export function getCachedIdrRate(): { rate: number; updatedAt: number } | null {
 
 export function setCachedIdrRate(rate: number): void {
   if (typeof window === "undefined") return;
-  localStorage.setItem(
-    IDR_RATE_STORAGE_KEY,
-    JSON.stringify({ rate, updatedAt: Date.now() })
-  );
+  localStorage.setItem(IDR_RATE_STORAGE_KEY, JSON.stringify({ rate, updatedAt: Date.now() }));
 }
 
 export async function fetchIdrRate(): Promise<number | null> {

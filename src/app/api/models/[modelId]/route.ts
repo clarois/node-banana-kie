@@ -761,6 +761,55 @@ function getKieSchema(modelId: string): ExtractedSchema {
         { name: "imageUrls", type: "image", required: true, label: "Image", isArray: true },
       ],
     },
+    "veo3-fast/reference-to-video": {
+      parameters: [
+        { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["16:9"], default: "16:9" },
+        { name: "seeds", type: "integer", description: "Random seed (10000-99999)", minimum: 10000, maximum: 99999 },
+        { name: "enableTranslation", type: "boolean", description: "Enable prompt translation", default: true },
+        { name: "watermark", type: "boolean", description: "Apply watermark", default: false },
+      ],
+      inputs: [
+        { name: "prompt", type: "text", required: true, label: "Prompt" },
+        { name: "imageUrls", type: "image", required: true, label: "Image", isArray: true },
+      ],
+    },
+    "veo3/extend-video": {
+      parameters: [
+        { name: "model", type: "string", description: "Model speed", enum: ["fast", "quality"], default: "fast" },
+        { name: "seeds", type: "integer", description: "Random seed (10000-99999)", minimum: 10000, maximum: 99999 },
+        { name: "watermark", type: "boolean", description: "Apply watermark", default: false },
+      ],
+      inputs: [
+        { name: "prompt", type: "text", required: true, label: "Prompt" },
+        { name: "taskId", type: "text", required: true, label: "TaskId" },
+      ],
+    },
+    "veo3/get-1080p-video": {
+      parameters: [
+        { name: "index", type: "integer", description: "Result index", minimum: 0, default: 0 },
+      ],
+      inputs: [
+        { name: "taskId", type: "text", required: true, label: "TaskId" },
+      ],
+    },
+    "veo3/get-4k-video": {
+      parameters: [
+        { name: "index", type: "integer", description: "Result index", minimum: 0, default: 0 },
+      ],
+      inputs: [
+        { name: "taskId", type: "text", required: true, label: "TaskId" },
+      ],
+    },
+    "sora-2-pro-storyboard": {
+      parameters: [
+        { name: "n_frames", type: "string", description: "Total video length", enum: ["10", "15", "25"], default: "15" },
+        { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["portrait", "landscape"], default: "landscape" },
+        { name: "shots", type: "array", description: "JSON array of shot objects [{Scene: string, duration: number}]. Total duration must not exceed n_frames.", required: true },
+      ],
+      inputs: [
+        { name: "image_urls", type: "image", required: true, label: "Reference Image", isArray: true },
+      ],
+    },
   };
 
   return schemas[modelId] || { parameters: [], inputs: [] };

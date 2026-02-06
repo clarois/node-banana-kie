@@ -20,6 +20,11 @@ import {
   PromptConstructorNodeData,
   NanoBananaNodeData,
   GenerateVideoNodeData,
+  VeoReferenceVideoNodeData,
+  VeoExtendVideoNodeData,
+  Veo1080pVideoNodeData,
+  Veo4kVideoNodeData,
+  SoraStoryboardNodeData,
   LLMGenerateNodeData,
   SplitGridNodeData,
   OutputNodeData,
@@ -142,7 +147,7 @@ interface WorkflowStore {
 
   // Helpers
   getNodeById: (id: string) => WorkflowNode | undefined;
-  getConnectedInputs: (nodeId: string) => { images: string[]; videos: string[]; audio: string[]; text: string | null; dynamicInputs: Record<string, string | string[]>; easeCurve: { bezierHandles: [number, number, number, number]; easingPreset: string | null } | null };
+  getConnectedInputs: (nodeId: string) => { images: string[]; videos: string[]; audio: string[]; text: string | null; taskId: string | null; dynamicInputs: Record<string, string | string[]>; easeCurve: { bezierHandles: [number, number, number, number]; easingPreset: string | null } | null };
   validateWorkflow: () => { valid: boolean; errors: string[] };
 
   // Global Image History
@@ -878,6 +883,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     const videos: string[] = [];
     const audio: string[] = [];
     let text: string | null = null;
+    let taskId: string | null = null;
     const dynamicInputs: Record<string, string | string[]> = {};
 
     // Get the target node to check for inputSchema
@@ -922,11 +928,11 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     // Helper to determine if a handle ID is a text type
     const isTextHandle = (handleId: string | null | undefined): boolean => {
       if (!handleId) return false;
-      return handleId === "text" || handleId.startsWith("text-") || handleId.includes("prompt");
+      return handleId === "text" || handleId.startsWith("text-") || handleId.includes("prompt") || handleId === "taskId";
     };
 
     // Helper to extract output from source node
-    const getSourceOutput = (sourceNode: WorkflowNode): { type: "image" | "text" | "video" | "audio"; value: string | null } => {
+    const getSourceOutput = (sourceNode: WorkflowNode, sourceHandle?: string | null): { type: "image" | "text" | "video" | "audio"; value: string | null } => {
       if (sourceNode.type === "imageInput") {
         return { type: "image", value: (sourceNode.data as ImageInputNodeData).image };
       } else if (sourceNode.type === "audioInput") {
@@ -936,8 +942,23 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       } else if (sourceNode.type === "nanoBanana") {
         return { type: "image", value: (sourceNode.data as NanoBananaNodeData).outputImage };
       } else if (sourceNode.type === "generateVideo") {
-        // Return video type - generateVideo and output nodes handle this appropriately
-        return { type: "video", value: (sourceNode.data as GenerateVideoNodeData).outputVideo };
+        const videoData = sourceNode.data as GenerateVideoNodeData;
+        if (sourceHandle === "taskId") {
+          return { type: "text", value: videoData.outputTaskId || null };
+        }
+        return { type: "video", value: videoData.outputVideo };
+      } else if (sourceNode.type === "veoReferenceVideo") {
+        const veoData = sourceNode.data as { outputVideo: string | null; outputTaskId?: string | null };
+        if (sourceHandle === "taskId") {
+          return { type: "text", value: veoData.outputTaskId || null };
+        }
+        return { type: "video", value: veoData.outputVideo };
+      } else if (sourceNode.type === "veoExtendVideo" || sourceNode.type === "veo1080pVideo" || sourceNode.type === "veo4kVideo") {
+        const veoData = sourceNode.data as { outputVideo: string | null; outputTaskId?: string | null };
+        if (sourceHandle === "taskId") {
+          return { type: "text", value: veoData.outputTaskId || null };
+        }
+        return { type: "video", value: veoData.outputVideo };
       } else if (sourceNode.type === "videoStitch") {
         return { type: "video", value: (sourceNode.data as VideoStitchNodeData).outputVideo };
       } else if (sourceNode.type === "easeCurve") {
@@ -949,8 +970,15 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         return { type: "text", value: pcData.outputText || pcData.template || null };
       } else if (sourceNode.type === "llmGenerate") {
         return { type: "text", value: (sourceNode.data as LLMGenerateNodeData).outputText };
+      } else if (sourceNode.type === "soraStoryboard") {
+        const soraData = sourceNode.data as SoraStoryboardNodeData;
+        if (sourceHandle === "taskId") {
+          return { type: "text", value: soraData.outputTaskId || null };
+        }
+        return { type: "video", value: soraData.outputVideo || null };
       }
       return { type: "image", value: null };
+
     };
 
     edges
@@ -960,7 +988,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         if (!sourceNode) return;
 
         const handleId = edge.targetHandle;
-        const { type, value } = getSourceOutput(sourceNode);
+        const { type, value } = getSourceOutput(sourceNode, edge.sourceHandle);
 
         if (!value) return;
 
@@ -980,7 +1008,9 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
         // Route to typed arrays based on source output type
         // This preserves type information from the source node
-        if (type === "video") {
+        if (handleId === "taskId") {
+          taskId = value;
+        } else if (type === "video") {
           videos.push(value);
         } else if (type === "audio") {
           audio.push(value);
@@ -1007,7 +1037,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
       }
     }
 
-    return { images, videos, audio, text, dynamicInputs, easeCurve };
+    return { images, videos, audio, text, taskId, dynamicInputs, easeCurve };
   },
 
   validateWorkflow: () => {
@@ -1034,6 +1064,28 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         }
       });
 
+    // Check soraStoryboard nodes have reference image and correct total duration
+    nodes
+      .filter((n) => n.type === "soraStoryboard")
+      .forEach((node) => {
+        const data = node.data as SoraStoryboardNodeData;
+        
+        // Check image input
+        const imageConnected = edges.some(
+          (e) => e.target === node.id && e.targetHandle === "image"
+        );
+        if (!imageConnected) {
+          errors.push(`Sora Storyboard "${node.id}" missing reference image input`);
+        }
+
+        // Check total duration
+        const totalDuration = data.scenes.reduce((sum, s) => sum + s.duration, 0);
+        const targetDuration = parseInt(data.nFrames);
+        if (Math.abs(totalDuration - targetDuration) > 0.01) {
+          errors.push(`Sora Storyboard "${node.id}" total duration (${totalDuration}s) must match frame duration (${targetDuration}s)`);
+        }
+      });
+
     // Check generateVideo nodes have required text input
     nodes
       .filter((n) => n.type === "generateVideo")
@@ -1045,6 +1097,63 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
         if (!textConnected) {
           errors.push(`Video node "${node.id}" missing text input`);
+        }
+      });
+
+    // Check Veo reference nodes have prompt and image input
+    nodes
+      .filter((n) => n.type === "veoReferenceVideo")
+      .forEach((node) => {
+        const textConnected = edges.some(
+          (e) => e.target === node.id &&
+                 (e.targetHandle === "text" || e.targetHandle?.startsWith("text-"))
+        );
+        const imageConnected = edges.some(
+          (e) => e.target === node.id &&
+                 (e.targetHandle === "image" || e.targetHandle?.startsWith("image-"))
+        );
+        const nodeData = node.data as { inputPrompt?: string | null };
+
+        if (!textConnected && !nodeData.inputPrompt) {
+          errors.push(`Veo reference node "${node.id}" missing prompt input`);
+        }
+        if (!imageConnected) {
+          errors.push(`Veo reference node "${node.id}" missing image input`);
+        }
+      });
+
+    // Check Veo extend nodes have taskId and prompt input
+    nodes
+      .filter((n) => n.type === "veoExtendVideo")
+      .forEach((node) => {
+        const taskIdConnected = edges.some(
+          (e) => e.target === node.id && e.targetHandle === "taskId"
+        );
+        const textConnected = edges.some(
+          (e) => e.target === node.id &&
+                 (e.targetHandle === "text" || e.targetHandle?.startsWith("text-"))
+        );
+        const nodeData = node.data as { inputTaskId?: string | null; inputPrompt?: string | null };
+
+        if (!taskIdConnected && !nodeData.inputTaskId) {
+          errors.push(`Veo extend node "${node.id}" missing taskId input`);
+        }
+        if (!textConnected && !nodeData.inputPrompt) {
+          errors.push(`Veo extend node "${node.id}" missing prompt input`);
+        }
+      });
+
+    // Check Veo 1080p/4k nodes have taskId input
+    nodes
+      .filter((n) => n.type === "veo1080pVideo" || n.type === "veo4kVideo")
+      .forEach((node) => {
+        const taskIdConnected = edges.some(
+          (e) => e.target === node.id && e.targetHandle === "taskId"
+        );
+        const nodeData = node.data as { inputTaskId?: string | null };
+
+        if (!taskIdConnected && !nodeData.inputTaskId) {
+          errors.push(`Veo ${node.type === "veo1080pVideo" ? "1080p" : "4k"} node "${node.id}" missing taskId input`);
         }
       });
 
@@ -1615,6 +1724,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
                 updateNodeData(node.id, {
                   outputVideo: videoData,
+                  outputTaskId: result.taskId || null,
                   status: "complete",
                   error: null,
                   videoHistory: updatedHistory,
@@ -1649,6 +1759,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
                 updateNodeData(node.id, {
                   outputVideo: result.image,
+                  outputTaskId: result.taskId || null,
                   status: "complete",
                   error: null,
                   videoHistory: updatedHistory,
@@ -1703,6 +1814,309 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
               if (error instanceof DOMException && error.name === 'AbortError') throw error;
               throw new Error(errorMessage);
             }
+            break;
+          }
+
+          case "veoReferenceVideo": {
+            const { images, text } = getConnectedInputs(node.id);
+            const nodeData = node.data as VeoReferenceVideoNodeData;
+            const promptText = text || nodeData.inputPrompt || null;
+
+            if (!promptText || images.length === 0) {
+              updateNodeData(node.id, {
+                status: "error",
+                error: "Missing required inputs",
+              });
+              throw new Error("Missing required inputs");
+            }
+
+            updateNodeData(node.id, {
+              inputImages: images,
+              inputPrompt: promptText,
+              status: "loading",
+              error: null,
+            });
+
+            try {
+              const providerSettingsState = get().providerSettings;
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              const kieConfig = providerSettingsState.providers.kie;
+              if (kieConfig?.apiKey) {
+                headers["X-Kie-Key"] = kieConfig.apiKey;
+              }
+
+              const response = await fetch("/api/generate", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  prompt: promptText,
+                  images,
+                  parameters: nodeData.parameters,
+                  veoOperation: "reference",
+                  mediaType: "video" as const,
+                }),
+                signal,
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                  const errorJson = JSON.parse(errorText);
+                  errorMessage = errorJson.error || errorMessage;
+                } catch {
+                  if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+                }
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: errorMessage,
+                });
+                throw new Error(errorMessage);
+              }
+
+              const result = await response.json();
+              const videoData = result.video || result.videoUrl;
+              if (result.success && videoData) {
+                updateNodeData(node.id, {
+                  outputVideo: videoData,
+                  outputTaskId: result.taskId || null,
+                  status: "complete",
+                  error: null,
+                });
+              } else {
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: result.error || "Veo reference failed",
+                });
+                throw new Error(result.error || "Veo reference failed");
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : "Veo reference failed";
+              updateNodeData(node.id, {
+                status: "error",
+                error: errorMessage,
+              });
+              if (error instanceof DOMException && error.name === "AbortError") throw error;
+              throw new Error(errorMessage);
+            }
+            break;
+          }
+
+          case "veoExtendVideo": {
+            const { text, taskId } = getConnectedInputs(node.id);
+            const nodeData = node.data as VeoExtendVideoNodeData;
+            const promptText = text || nodeData.inputPrompt || null;
+            const taskIdValue = taskId || nodeData.inputTaskId || null;
+
+            if (!promptText || !taskIdValue) {
+              updateNodeData(node.id, {
+                status: "error",
+                error: "Missing required inputs",
+              });
+              throw new Error("Missing required inputs");
+            }
+
+            updateNodeData(node.id, {
+              inputPrompt: promptText,
+              inputTaskId: taskIdValue,
+              status: "loading",
+              error: null,
+            });
+
+            try {
+              const providerSettingsState = get().providerSettings;
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              const kieConfig = providerSettingsState.providers.kie;
+              if (kieConfig?.apiKey) {
+                headers["X-Kie-Key"] = kieConfig.apiKey;
+              }
+
+              const response = await fetch("/api/generate", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  prompt: promptText,
+                  taskId: taskIdValue,
+                  parameters: nodeData.parameters,
+                  veoOperation: "extend",
+                  mediaType: "video" as const,
+                }),
+                signal,
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                  const errorJson = JSON.parse(errorText);
+                  errorMessage = errorJson.error || errorMessage;
+                } catch {
+                  if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+                }
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: errorMessage,
+                });
+                throw new Error(errorMessage);
+              }
+
+              const result = await response.json();
+              const videoData = result.video || result.videoUrl;
+              if (result.success && videoData) {
+                updateNodeData(node.id, {
+                  outputVideo: videoData,
+                  outputTaskId: result.taskId || null,
+                  status: "complete",
+                  error: null,
+                });
+              } else {
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: result.error || "Veo extend failed",
+                });
+                throw new Error(result.error || "Veo extend failed");
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : "Veo extend failed";
+              updateNodeData(node.id, {
+                status: "error",
+                error: errorMessage,
+              });
+              if (error instanceof DOMException && error.name === "AbortError") throw error;
+              throw new Error(errorMessage);
+            }
+            break;
+          }
+
+          case "veo1080pVideo":
+          case "veo4kVideo": {
+            const { taskId } = getConnectedInputs(node.id);
+            const nodeData = node.data as Veo1080pVideoNodeData | Veo4kVideoNodeData;
+            const taskIdValue = taskId || nodeData.inputTaskId || null;
+
+            if (!taskIdValue) {
+              updateNodeData(node.id, {
+                status: "error",
+                error: "Missing required inputs",
+              });
+              throw new Error("Missing required inputs");
+            }
+
+            updateNodeData(node.id, {
+              inputTaskId: taskIdValue,
+              status: "loading",
+              error: null,
+            });
+
+            try {
+              const providerSettingsState = get().providerSettings;
+              const headers: Record<string, string> = {
+                "Content-Type": "application/json",
+              };
+              const kieConfig = providerSettingsState.providers.kie;
+              if (kieConfig?.apiKey) {
+                headers["X-Kie-Key"] = kieConfig.apiKey;
+              }
+
+              const operation = node.type === "veo1080pVideo" ? "get1080p" : "get4k";
+              const response = await fetch("/api/generate", {
+                method: "POST",
+                headers,
+                body: JSON.stringify({
+                  taskId: taskIdValue,
+                  parameters: nodeData.parameters,
+                  veoOperation: operation,
+                  mediaType: "video" as const,
+                }),
+                signal,
+              });
+
+              if (!response.ok) {
+                const errorText = await response.text();
+                let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+                try {
+                  const errorJson = JSON.parse(errorText);
+                  errorMessage = errorJson.error || errorMessage;
+                } catch {
+                  if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+                }
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: errorMessage,
+                });
+                throw new Error(errorMessage);
+              }
+
+              const result = await response.json();
+              const videoData = result.video || result.videoUrl;
+              if (result.success && videoData) {
+                updateNodeData(node.id, {
+                  outputVideo: videoData,
+                  outputTaskId: result.taskId || taskIdValue,
+                  status: "complete",
+                  error: null,
+                });
+              } else {
+                updateNodeData(node.id, {
+                  status: "error",
+                  error: result.error || "Veo upscale failed",
+                });
+                throw new Error(result.error || "Veo upscale failed");
+              }
+            } catch (error) {
+              const errorMessage = error instanceof Error ? error.message : "Veo upscale failed";
+              updateNodeData(node.id, {
+                status: "error",
+                error: errorMessage,
+              });
+              if (error instanceof DOMException && error.name === "AbortError") throw error;
+              throw new Error(errorMessage);
+            }
+            break;
+          }
+
+          case "soraStoryboard": {
+            const storyboardData = node.data as SoraStoryboardNodeData;
+            const { images } = get().getConnectedInputs(node.id);
+
+            const requestPayload = {
+              images: images.length > 0 ? [images[0]] : [],
+              prompt: "", // Unused by storyboard model but required by API
+              selectedModel: {
+                provider: "kie",
+                modelId: "sora-2-pro-storyboard/storyboard",
+              },
+              parameters: {
+                n_frames: storyboardData.nFrames,
+                aspect_ratio: storyboardData.aspectRatio,
+              },
+              dynamicInputs: {
+                shots: storyboardData.scenes,
+              },
+            };
+
+            const response = await fetch("/api/generate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(requestPayload),
+            });
+
+            if (!response.ok) {
+              const errorData = await response.json();
+              throw new Error(errorData.error || "Generation failed");
+            }
+
+            const result = await response.json();
+
+            get().updateNodeData(node.id, {
+              outputVideo: result.video || result.videoUrl || null,
+              outputTaskId: result.taskId || null,
+              status: "complete",
+            } as Partial<SoraStoryboardNodeData>);
             break;
           }
 
@@ -2792,6 +3206,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
           updateNodeData(nodeId, {
             outputVideo: videoData,
+            outputTaskId: result.taskId || null,
             status: "complete",
             error: null,
             videoHistory: updatedHistory,
@@ -2824,6 +3239,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
           updateNodeData(nodeId, {
             outputVideo: result.image,
+            outputTaskId: result.taskId || null,
             status: "complete",
             error: null,
             videoHistory: updatedHistory,
@@ -2850,6 +3266,222 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
           updateNodeData(nodeId, {
             status: "error",
             error: result.error || "Video generation failed",
+          });
+        }
+      } else if (node.type === "veoReferenceVideo") {
+        const nodeData = node.data as VeoReferenceVideoNodeData;
+        const { images, text } = getConnectedInputs(nodeId);
+        const promptText = text || nodeData.inputPrompt || null;
+
+        if (!promptText || images.length === 0) {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: "Missing required inputs",
+          });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        updateNodeData(nodeId, {
+          inputImages: images,
+          inputPrompt: promptText,
+          status: "loading",
+          error: null,
+        });
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        const kieConfig = get().providerSettings.providers.kie;
+        if (kieConfig?.apiKey) {
+          headers["X-Kie-Key"] = kieConfig.apiKey;
+        }
+
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            prompt: promptText,
+            images,
+            parameters: nodeData.parameters,
+            veoOperation: "reference",
+            mediaType: "video",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `HTTP ${response.status}`;
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorMessage;
+          } catch {
+            if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+          }
+          updateNodeData(nodeId, { status: "error", error: errorMessage });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        const result = await response.json();
+        const videoData = result.video || result.videoUrl;
+        if (result.success && videoData) {
+          updateNodeData(nodeId, {
+            outputVideo: videoData,
+            outputTaskId: result.taskId || null,
+            status: "complete",
+            error: null,
+          });
+        } else {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: result.error || "Veo reference failed",
+          });
+        }
+      } else if (node.type === "veoExtendVideo") {
+        const nodeData = node.data as VeoExtendVideoNodeData;
+        const { text, taskId } = getConnectedInputs(nodeId);
+        const promptText = text || nodeData.inputPrompt || null;
+        const taskIdValue = taskId || nodeData.inputTaskId || null;
+
+        if (!promptText || !taskIdValue) {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: "Missing required inputs",
+          });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        updateNodeData(nodeId, {
+          inputPrompt: promptText,
+          inputTaskId: taskIdValue,
+          status: "loading",
+          error: null,
+        });
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        const kieConfig = get().providerSettings.providers.kie;
+        if (kieConfig?.apiKey) {
+          headers["X-Kie-Key"] = kieConfig.apiKey;
+        }
+
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            prompt: promptText,
+            taskId: taskIdValue,
+            parameters: nodeData.parameters,
+            veoOperation: "extend",
+            mediaType: "video",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `HTTP ${response.status}`;
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorMessage;
+          } catch {
+            if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+          }
+          updateNodeData(nodeId, { status: "error", error: errorMessage });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        const result = await response.json();
+        const videoData = result.video || result.videoUrl;
+        if (result.success && videoData) {
+          updateNodeData(nodeId, {
+            outputVideo: videoData,
+            outputTaskId: result.taskId || null,
+            status: "complete",
+            error: null,
+          });
+        } else {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: result.error || "Veo extend failed",
+          });
+        }
+      } else if (node.type === "veo1080pVideo" || node.type === "veo4kVideo") {
+        const nodeData = node.data as Veo1080pVideoNodeData | Veo4kVideoNodeData;
+        const { taskId } = getConnectedInputs(nodeId);
+        const taskIdValue = taskId || nodeData.inputTaskId || null;
+
+        if (!taskIdValue) {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: "Missing required inputs",
+          });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        updateNodeData(nodeId, {
+          inputTaskId: taskIdValue,
+          status: "loading",
+          error: null,
+        });
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        const kieConfig = get().providerSettings.providers.kie;
+        if (kieConfig?.apiKey) {
+          headers["X-Kie-Key"] = kieConfig.apiKey;
+        }
+
+        const operation = node.type === "veo1080pVideo" ? "get1080p" : "get4k";
+        const response = await fetch("/api/generate", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            taskId: taskIdValue,
+            parameters: nodeData.parameters,
+            veoOperation: operation,
+            mediaType: "video",
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          let errorMessage = `HTTP ${response.status}`;
+          try {
+            const errorJson = JSON.parse(errorText);
+            errorMessage = errorJson.error || errorMessage;
+          } catch {
+            if (errorText) errorMessage += ` - ${errorText.substring(0, 200)}`;
+          }
+          updateNodeData(nodeId, { status: "error", error: errorMessage });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
+
+        const result = await response.json();
+        const videoData = result.video || result.videoUrl;
+        if (result.success && videoData) {
+          updateNodeData(nodeId, {
+            outputVideo: videoData,
+            outputTaskId: result.taskId || taskIdValue,
+            status: "complete",
+            error: null,
+          });
+        } else {
+          updateNodeData(nodeId, {
+            status: "error",
+            error: result.error || "Veo upscale failed",
           });
         }
       } else if (node.type === "splitGrid") {

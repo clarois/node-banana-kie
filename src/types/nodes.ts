@@ -30,6 +30,11 @@ export type NodeType =
   | "promptConstructor"
   | "nanoBanana"
   | "generateVideo"
+  | "soraStoryboard"
+  | "veoReferenceVideo"
+  | "veoExtendVideo"
+  | "veo1080pVideo"
+  | "veo4kVideo"
   | "llmGenerate"
   | "splitGrid"
   | "output"
@@ -164,6 +169,7 @@ export interface GenerateVideoNodeData extends BaseNodeData {
   inputPrompt: string | null;
   outputVideo: string | null; // Video data URL or URL
   outputVideoRef?: string; // External video reference for storage optimization
+  outputTaskId?: string | null; // Task ID for chaining Veo operations
   selectedModel?: SelectedModel; // Required for video generation (no legacy fallback)
   parameters?: Record<string, unknown>; // Model-specific parameters
   inputSchema?: ModelInputDef[]; // Model's input schema for dynamic handles
@@ -171,6 +177,86 @@ export interface GenerateVideoNodeData extends BaseNodeData {
   error: string | null;
   videoHistory: CarouselVideoItem[]; // Carousel history (IDs only)
   selectedVideoHistoryIndex: number; // Currently selected video in carousel
+}
+
+/**
+ * Veo Reference-to-Video node - uses Kie Veo reference endpoint
+ */
+export interface VeoReferenceVideoNodeData extends BaseNodeData {
+  inputImages: string[];
+  inputImageRefs?: string[];
+  inputPrompt: string | null;
+  outputVideo: string | null;
+  outputVideoRef?: string;
+  outputTaskId?: string | null;
+  parameters?: Record<string, unknown>;
+  status: NodeStatus;
+  error: string | null;
+}
+
+/**
+ * Veo Extend node - extends a prior Veo task
+ */
+export interface VeoExtendVideoNodeData extends BaseNodeData {
+  inputTaskId: string | null;
+  inputPrompt: string | null;
+  outputVideo: string | null;
+  outputVideoRef?: string;
+  outputTaskId?: string | null;
+  parameters?: Record<string, unknown>;
+  status: NodeStatus;
+  error: string | null;
+}
+
+/**
+ * Veo 1080p node - fetches 1080p video for a task
+ */
+export interface Veo1080pVideoNodeData extends BaseNodeData {
+  inputTaskId: string | null;
+  outputVideo: string | null;
+  outputVideoRef?: string;
+  outputTaskId?: string | null;
+  parameters?: Record<string, unknown>;
+  status: NodeStatus;
+  error: string | null;
+}
+
+/**
+ * Veo 4k node - fetches 4k video for a task
+ */
+export interface Veo4kVideoNodeData extends BaseNodeData {
+  inputTaskId: string | null;
+  outputVideo: string | null;
+  outputVideoRef?: string;
+  outputTaskId?: string | null;
+  parameters?: Record<string, unknown>;
+  status: NodeStatus;
+  error: string | null;
+}
+
+/**
+ * Storyboard scene for Sora 2 Pro
+ */
+export interface StoryboardScene {
+  id: string;
+  prompt: string;
+  duration: number; // 0.1 to 15 seconds
+}
+
+/**
+ * Sora Storyboard node - multi-scene video generation with custom scene editor
+ */
+export interface SoraStoryboardNodeData extends BaseNodeData {
+  inputImage: string | null;
+  inputImageRef?: string;
+  scenes: StoryboardScene[];
+  nFrames: "10" | "15" | "25"; // Total video duration in seconds
+  aspectRatio: "portrait" | "landscape";
+  outputVideo: string | null;
+  outputVideoRef?: string;
+  outputTaskId?: string | null;
+  status: NodeStatus;
+  error: string | null;
 }
 
 /**
@@ -292,6 +378,11 @@ export type WorkflowNodeData =
   | PromptConstructorNodeData
   | NanoBananaNodeData
   | GenerateVideoNodeData
+  | SoraStoryboardNodeData
+  | VeoReferenceVideoNodeData
+  | VeoExtendVideoNodeData
+  | Veo1080pVideoNodeData
+  | Veo4kVideoNodeData
   | LLMGenerateNodeData
   | SplitGridNodeData
   | OutputNodeData

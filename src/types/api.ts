@@ -17,6 +17,7 @@ export interface GenerateRequest {
   model?: ModelType;
   useGoogleSearch?: boolean; // Only for Nano Banana Pro
   mediaType?: "image" | "video"; // Indicates expected output type for provider routing
+  taskId?: string; // Optional for task-based video operations
 }
 
 export interface GenerateResponse {
@@ -25,6 +26,7 @@ export interface GenerateResponse {
   video?: string;
   videoUrl?: string; // For large videos, return URL directly
   contentType?: "image" | "video";
+  taskId?: string;
   error?: string;
 }
 
