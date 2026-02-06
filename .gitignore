@@ -45,3 +45,8 @@ logs/*.json
 
 # planning docs
 .planning/
+
+# auth token storage
+data/
+
+opencode-openai-codex-auth/

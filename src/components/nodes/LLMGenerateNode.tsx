@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Handle, Position, NodeProps, Node } from "@xyflow/react";
 import { BaseNode } from "./BaseNode";
 import { useCommentNavigation } from "@/hooks/useCommentNavigation";
@@ -10,6 +10,7 @@ import { LLMGenerateNodeData, LLMProvider, LLMModelType } from "@/types";
 const PROVIDERS: { value: LLMProvider; label: string }[] = [
   { value: "google", label: "Google" },
   { value: "openai", label: "OpenAI" },
+  { value: "openai-auth", label: "OpenAI (Auth)" },
 ];
 
 const MODELS: Record<LLMProvider, { value: LLMModelType; label: string }[]> = {
@@ -19,6 +20,12 @@ const MODELS: Record<LLMProvider, { value: LLMModelType; label: string }[]> = {
     { value: "gemini-3-pro-preview", label: "Gemini 3.0 Pro" },
   ],
   openai: [
+    { value: "gpt-5.2", label: "GPT-5.2" },
+    { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+    { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
+  ],
+  "openai-auth": [
+    { value: "gpt-5.2", label: "GPT-5.2" },
     { value: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
     { value: "gpt-4.1-nano", label: "GPT-4.1 Nano" },
   ],
@@ -30,6 +37,7 @@ export function LLMGenerateNode({ id, data, selected }: NodeProps<LLMGenerateNod
   const nodeData = data;
   const commentNavigation = useCommentNavigation(id);
   const updateNodeData = useWorkflowStore((state) => state.updateNodeData);
+  const [openaiAuthStatus, setOpenaiAuthStatus] = useState<{ connected: boolean; expired?: boolean } | null>(null);
 
   const handleProviderChange = useCallback(
     (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -60,6 +68,13 @@ export function LLMGenerateNode({ id, data, selected }: NodeProps<LLMGenerateNod
   const handleMaxTokensChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
       updateNodeData(id, { maxTokens: parseInt(e.target.value, 10) });
+    },
+    [id, updateNodeData]
+  );
+
+  const handleSystemPromptChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      updateNodeData(id, { systemPrompt: e.target.value });
     },
     [id, updateNodeData]
   );
@@ -96,6 +111,14 @@ export function LLMGenerateNode({ id, data, selected }: NodeProps<LLMGenerateNod
   const model = availableModels.some(m => m.value === nodeData.model)
     ? nodeData.model
     : availableModels[0].value;
+
+  useEffect(() => {
+    if (provider !== "openai-auth") return;
+    fetch("/api/auth/openai/status")
+      .then((res) => res.json())
+      .then((data) => setOpenaiAuthStatus(data))
+      .catch(() => setOpenaiAuthStatus(null));
+  }, [provider]);
 
   return (
     <BaseNode
@@ -226,6 +249,12 @@ export function LLMGenerateNode({ id, data, selected }: NodeProps<LLMGenerateNod
           ))}
         </select>
 
+        {provider === "openai-auth" && (!openaiAuthStatus?.connected || openaiAuthStatus.expired) && (
+          <div className="text-[9px] text-yellow-400">
+            {openaiAuthStatus?.expired ? "OpenAI Auth expired. Reconnect in Settings." : "OpenAI Auth not connected."}
+          </div>
+        )}
+
         {/* Model selector */}
         <select
           value={model}
@@ -258,6 +287,15 @@ export function LLMGenerateNode({ id, data, selected }: NodeProps<LLMGenerateNod
           </button>
           {showParams && (
             <div className="flex flex-col gap-2 pt-1 border-t border-neutral-700/50">
+              <div className="flex flex-col gap-0.5">
+                <label className="text-[9px] text-neutral-500">System Prompt</label>
+                <textarea
+                  value={nodeData.systemPrompt || ""}
+                  onChange={handleSystemPromptChange}
+                  placeholder="Leave empty to use the default system prompt"
+                  className="nodrag w-full min-h-[60px] text-[10px] bg-neutral-900/50 border border-neutral-700 rounded p-1 text-neutral-300 focus:outline-none focus:ring-1 focus:ring-neutral-600"
+                />
+              </div>
               {/* Temperature slider */}
               <div className="flex flex-col gap-0.5">
                 <label className="text-[9px] text-neutral-500">Temperature: {nodeData.temperature.toFixed(1)}</label>
