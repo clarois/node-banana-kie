@@ -1767,6 +1767,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 body: JSON.stringify({
                   prompt: text,
                   ...(images.length > 0 && { images }),
+                  systemPrompt: nodeData.systemPrompt,
                   provider: nodeData.provider,
                   model: nodeData.model,
                   temperature: nodeData.temperature,
@@ -2598,6 +2599,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
           body: JSON.stringify({
             prompt: text,
             ...(images.length > 0 && { images }),
+            systemPrompt: nodeData.systemPrompt,
             provider: nodeData.provider,
             model: nodeData.model,
             temperature: nodeData.temperature,
