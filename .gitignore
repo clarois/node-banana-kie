@@ -45,3 +45,4 @@ logs/*.json
 
 # planning docs
 .planning/
+/opencode-openai-codex-auth
