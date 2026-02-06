@@ -2435,25 +2435,39 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
           prompt: text,
         });
 
-        const response = await fetch("/api/generate", {
-          method: "POST",
-          headers,
-          body: JSON.stringify({
-            images,
-            prompt: text,
-            aspectRatio: nodeData.aspectRatio,
-            resolution: nodeData.resolution,
-            model: nodeData.model,
-            useGoogleSearch: nodeData.useGoogleSearch,
-            selectedModel: nodeData.selectedModel,
-            parameters: nodeData.parameters,
-            dynamicInputs,  // Pass dynamic inputs for schema-mapped connections
-          }),
-        });
+        let response: Response;
+        try {
+          response = await fetch("/api/generate", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({
+              images,
+              prompt: text,
+              aspectRatio: nodeData.aspectRatio,
+              resolution: nodeData.resolution,
+              model: nodeData.model,
+              useGoogleSearch: nodeData.useGoogleSearch,
+              selectedModel: nodeData.selectedModel,
+              parameters: nodeData.parameters,
+              dynamicInputs,  // Pass dynamic inputs for schema-mapped connections
+            }),
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          logger.error('api.error', `${provider} API regeneration failed`, {
+            nodeId,
+            provider,
+            errorMessage: message,
+          }, err instanceof Error ? err : undefined);
+          updateNodeData(nodeId, { status: "error", error: message });
+          set({ isRunning: false, currentNodeIds: [] });
+          await logger.endSession();
+          return;
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
-          let errorMessage = `HTTP ${response.status}`;
+          let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
           try {
             const errorJson = JSON.parse(errorText);
             errorMessage = errorJson.error || errorMessage;
@@ -2464,6 +2478,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
             nodeId,
             provider,
             status: response.status,
+            statusText: response.statusText,
             errorMessage,
           });
           updateNodeData(nodeId, { status: "error", error: errorMessage });

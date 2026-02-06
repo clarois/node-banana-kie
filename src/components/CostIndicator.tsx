@@ -2,13 +2,15 @@
 
 import { useState, useMemo } from "react";
 import { useWorkflowStore } from "@/store/workflowStore";
-import { calculatePredictedCost, formatCost } from "@/utils/costCalculator";
+import { calculatePredictedCost, formatCost, formatCostIdr } from "@/utils/costCalculator";
+import { useIdrRate } from "@/hooks/useIdrRate";
 import { CostDialog } from "./CostDialog";
 
 export function CostIndicator() {
   const [showDialog, setShowDialog] = useState(false);
   const nodes = useWorkflowStore((state) => state.nodes);
   const incurredCost = useWorkflowStore((state) => state.incurredCost);
+  const idrRate = useIdrRate();
 
   const predictedCost = useMemo(() => {
     return calculatePredictedCost(nodes);
@@ -20,8 +22,11 @@ export function CostIndicator() {
     return null;
   }
 
-  // Always show dollar format (external provider costs not included in total)
-  const displayCost = formatCost(predictedCost.totalCost);
+  // Show USD with IDR conversion
+  const displayCost = `${formatCost(predictedCost.totalCost)} • ${formatCostIdr(
+    predictedCost.totalCost,
+    idrRate
+  )}`;
 
   return (
     <>

@@ -1297,29 +1297,29 @@ function getKieModelDefaults(modelId: string): Record<string, unknown> {
         aspect_ratio: "1:1",
       };
 
-    // Grok Imagine image models
-    case "grok-imagine/text-to-image":
-      return {
-        aspect_ratio: "1:1",
-      };
+  // Grok Imagine image models
+  case "grok-imagine/text-to-image":
+    return {
+      aspect_ratio: "1:1",
+    };
 
-    case "grok-imagine/image-to-image":
-      return {};
+  case "grok-imagine/image-to-image":
+    return {};
 
-    // Grok Imagine video models
-    case "grok-imagine/text-to-video":
-      return {
-        aspect_ratio: "2:3",
-        duration: "6",
-        mode: "normal",
-      };
+  // Grok Imagine video models
+  case "grok-imagine/text-to-video":
+    return {
+      aspect_ratio: "2:3",
+      duration: "6",
+      mode: "normal",
+    };
 
-    case "grok-imagine/image-to-video":
-      return {
-        aspect_ratio: "2:3",
-        duration: "6",
-        mode: "normal",
-      };
+  case "grok-imagine/image-to-video":
+    return {
+      aspect_ratio: "2:3",
+      duration: "6",
+      mode: "normal",
+    };
 
     // Kling 2.6 video models
     case "kling-2.6/text-to-video":
@@ -1388,6 +1388,8 @@ function getKieImageInputKey(modelId: string): string {
   if (modelId === "nano-banana-pro") return "image_input";
   if (modelId === "seedream/4.5-edit") return "image_urls";
   if (modelId === "gpt-image/1.5-image-to-image") return "input_urls";
+  if (modelId === "grok-imagine/image-to-image") return "image_url";
+  if (modelId === "grok-imagine/image-to-video") return "image_url";
   // Flux-2 I2I models use input_urls
   if (modelId === "flux-2/pro-image-to-image" || modelId === "flux-2/flex-image-to-image") return "input_urls";
   // Kling 2.5 turbo I2V uses singular image_url
@@ -1423,6 +1425,13 @@ function detectImageType(buffer: Buffer): { mimeType: string; ext: string } {
   }
   // Default to PNG
   return { mimeType: "image/png", ext: "png" };
+}
+
+function formatFetchError(error: unknown, url: string): string {
+  if (error instanceof Error) {
+    return `${error.message} (URL: ${url})`;
+  }
+  return `Request failed (URL: ${url})`;
 }
 
 /**
@@ -1463,18 +1472,60 @@ async function uploadImageToKie(
   // Format: data:{mime_type};base64,{data}
   const dataUrl = `data:${mimeType};base64,${imageData}`;
 
-  const response = await fetch("https://kieai.redpandaai.co/api/file-base64-upload", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      base64Data: dataUrl,
-      uploadPath: "images",
-      fileName: filename,
-    }),
-  });
+  const uploadTargets = [
+    { url: "https://kieai.redpandaai.co/api/file-base64-upload", retries: 2 },
+    { url: "https://api.kie.ai/api/v1/file-base64-upload", retries: 1 },
+  ];
+
+  let response: Response | null = null;
+  const errors: string[] = [];
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  for (const target of uploadTargets) {
+    for (let attempt = 1; attempt <= target.retries; attempt += 1) {
+      try {
+        response = await fetch(target.url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            base64Data: dataUrl,
+            uploadPath: "images",
+            fileName: filename,
+          }),
+        });
+      } catch (error) {
+        errors.push(`${target.url} (attempt ${attempt}) -> ${formatFetchError(error, target.url)}`);
+        response = null;
+        if (attempt < target.retries) {
+          await sleep(300);
+        }
+        continue;
+      }
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+      errors.push(`${target.url} (attempt ${attempt}) -> HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+      response = null;
+      if (attempt < target.retries) {
+        await sleep(300);
+      }
+    }
+
+    if (response) {
+      break;
+    }
+  }
+
+  if (!response) {
+    throw new Error(`Kie upload request failed: ${errors.join(" | ")}`);
+  }
 
   if (!response.ok) {
     const errorText = await response.text();
@@ -1523,11 +1574,16 @@ async function pollKieTaskCompletion(
 
     await new Promise(resolve => setTimeout(resolve, pollInterval));
 
-    const response = await fetch(pollUrl, {
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-      },
-    });
+    let response: Response;
+    try {
+      response = await fetch(pollUrl, {
+        headers: {
+          "Authorization": `Bearer ${apiKey}`,
+        },
+      });
+    } catch (error) {
+      return { success: false, error: `Kie poll request failed: ${formatFetchError(error, pollUrl)}` };
+    }
 
     if (!response.ok) {
       return { success: false, error: `Failed to poll status: ${response.status}` };
@@ -1853,21 +1909,29 @@ async function generateWithKie(
   console.log(`[API:${requestId}] Request body:`, JSON.stringify(bodyForLogging, null, 2));
 
   // Create task
-  const createResponse = await fetch(createUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
+  let createResponse: Response;
+  try {
+    createResponse = await fetch(createUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+  } catch (error) {
+    return {
+      success: false,
+      error: `${input.model.name}: ${formatFetchError(error, createUrl)}`,
+    };
+  }
 
   if (!createResponse.ok) {
     const errorText = await createResponse.text();
-    let errorDetail = errorText;
+    let errorDetail = errorText || createResponse.statusText || `HTTP ${createResponse.status}`;
     try {
       const errorJson = JSON.parse(errorText);
-      errorDetail = errorJson.message || errorJson.error || errorJson.detail || errorText;
+      errorDetail = errorJson.message || errorJson.error || errorJson.detail || errorDetail;
     } catch {
       // Keep original text
     }
@@ -1889,7 +1953,11 @@ async function generateWithKie(
 
   // Kie API returns HTTP 200 even on errors, check the response code
   if (createResult.code && createResult.code !== 200) {
-    const errorMsg = createResult.msg || createResult.message || "API error";
+    const errorMsg =
+      createResult.msg ||
+      createResult.message ||
+      createResult.error ||
+      `API error (code ${createResult.code})`;
     console.error(`[API:${requestId}] Kie API error (code ${createResult.code}):`, errorMsg);
     return {
       success: false,

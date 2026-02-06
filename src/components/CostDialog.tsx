@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useWorkflowStore } from "@/store/workflowStore";
-import { PredictedCostResult, CostBreakdownItem, formatCost } from "@/utils/costCalculator";
+import { PredictedCostResult, CostBreakdownItem, formatCost, formatCostIdr } from "@/utils/costCalculator";
+import { useIdrRate } from "@/hooks/useIdrRate";
 import { ProviderType } from "@/types/providers";
 
 interface CostDialogProps {
@@ -90,6 +91,7 @@ function ExternalLinkIcon() {
 
 export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogProps) {
   const resetIncurredCost = useWorkflowStore((state) => state.resetIncurredCost);
+  const idrRate = useIdrRate();
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -107,10 +109,12 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
     }
   };
 
-  // Separate Gemini (reliable pricing) from external providers (unreliable pricing)
+  // Separate priced providers from external providers (unreliable pricing)
+  const pricedProviders: ProviderType[] = ["gemini", "kie"];
   const geminiItems = predictedCost.breakdown.filter((item) => item.provider === "gemini");
+  const kieItems = predictedCost.breakdown.filter((item) => item.provider === "kie");
   const externalItems = predictedCost.breakdown.filter(
-    (item) => item.provider !== "gemini"
+    (item) => !pricedProviders.includes(item.provider)
   );
 
   // Group external items by provider
@@ -125,9 +129,11 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
   });
 
   const geminiTotal = geminiItems.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
+  const kieTotal = kieItems.reduce((sum, item) => sum + (item.subtotal ?? 0), 0);
   const externalNodeCount = externalItems.reduce((sum, item) => sum + item.count, 0);
 
   const hasGemini = geminiItems.length > 0;
+  const hasKie = kieItems.length > 0;
   const hasExternal = externalItems.length > 0;
 
   return (
@@ -148,6 +154,21 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
         </div>
 
         <div className="space-y-4">
+          {/* Predicted Total */}
+          {(predictedCost.nodeCount > 0 || predictedCost.totalCost > 0) && (
+            <div className="bg-neutral-900 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-sm text-neutral-300">Predicted Total</span>
+                <span className="ml-auto text-lg font-semibold text-green-400">
+                  {formatCost(predictedCost.totalCost)}
+                </span>
+              </div>
+              <div className="text-xs text-neutral-500 text-right">
+                {formatCostIdr(predictedCost.totalCost, idrRate)}
+              </div>
+            </div>
+          )}
+
           {/* Gemini Cost Section - prices are reliable */}
           {hasGemini && (
             <div className="bg-neutral-900 rounded-lg p-4">
@@ -158,9 +179,41 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
                   {formatCost(geminiTotal)}
                 </span>
               </div>
+              <div className="text-xs text-neutral-500 text-right mb-2">
+                {formatCostIdr(geminiTotal, idrRate)}
+              </div>
 
               <div className="space-y-1 pl-7">
                 {geminiItems.map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span className="text-neutral-500">
+                      {item.count}x {item.modelName}
+                    </span>
+                    <span className="text-neutral-400">
+                      {item.subtotal !== null ? formatCost(item.subtotal) : "—"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Kie.ai Cost Section - prices from credits map */}
+          {hasKie && (
+            <div className="bg-neutral-900 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-2">
+                <ProviderIcon provider="kie" />
+                <span className="text-sm text-neutral-300">Kie.ai Cost</span>
+                <span className="ml-auto text-lg font-semibold text-orange-400">
+                  {formatCost(kieTotal)}
+                </span>
+              </div>
+              <div className="text-xs text-neutral-500 text-right mb-2">
+                {formatCostIdr(kieTotal, idrRate)}
+              </div>
+
+              <div className="space-y-1 pl-7">
+                {kieItems.map((item, idx) => (
                   <div key={idx} className="flex justify-between text-xs">
                     <span className="text-neutral-500">
                       {item.count}x {item.modelName}
@@ -241,6 +294,9 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
                 {formatCost(incurredCost)}
               </span>
             </div>
+            <div className="text-xs text-neutral-500 text-right">
+              {formatCostIdr(incurredCost, idrRate)}
+            </div>
             <p className="text-xs text-neutral-500">
               Actual API spend from Gemini generations
             </p>
@@ -257,7 +313,7 @@ export function CostDialog({ predictedCost, incurredCost, onClose }: CostDialogP
 
           {/* Pricing Note */}
           <div className="text-xs text-neutral-600">
-            <p>Gemini pricing: $0.039-$0.24/image. External providers not tracked.</p>
+            <p>Gemini pricing: $0.039-$0.24/image. Kie.ai pricing from credits map. Other providers not tracked.</p>
           </div>
         </div>
       </div>

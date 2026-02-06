@@ -187,7 +187,7 @@ export function Header() {
         <div className="flex items-center gap-2">
           <img src="/banana_icon.png" alt="Banana" className="w-6 h-6" />
           <h1 className="text-2xl font-semibold text-neutral-100 tracking-tight">
-            Node Banana
+            AmBanana
           </h1>
 
           <div className="flex items-center gap-2 ml-4 pl-4 border-l border-neutral-700">
