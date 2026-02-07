@@ -197,13 +197,15 @@ export function ProjectSetupModal({
       const response = await fetch("/api/auth/openai/start");
       const result = await response.json();
       if (result?.success && result?.connected) {
-        // Tokens imported from Codex without browser flow
+        // Tokens imported from Codex
         setOpenaiAuthStatus({ connected: true });
-      } else if (result?.url) {
-        // Browser OAuth flow required
-        window.open(result.url, "_blank", "noopener,noreferrer");
+      } else {
+        // Show error message
+        setError(result?.message || "Failed to connect. Make sure you've run 'opencode auth login' first.");
+        setOpenaiAuthStatus(null);
       }
-    } catch {
+    } catch (err) {
+      setError("Failed to connect to OpenAI Auth. Please try again.");
       setOpenaiAuthStatus(null);
     } finally {
       setIsOpenAIOAuthBusy(false);

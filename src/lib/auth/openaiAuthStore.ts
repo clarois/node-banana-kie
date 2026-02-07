@@ -3,7 +3,19 @@ import path from "path";
 
 const STORE_PATH = path.join(process.cwd(), "data", "openai-auth.json");
 const TOKEN_ENDPOINT = "https://auth.openai.com/oauth/token";
-const CODEX_STORE_PATH = path.join(process.cwd(), "data", "auth.json");
+
+// Possible locations for opencode auth file
+const getCodexStorePaths = () => {
+  const homeDir = process.env.HOME || process.env.USERPROFILE || process.cwd();
+  return [
+    // Windows (where user's auth.json is)
+    path.join(homeDir, ".local", "share", "opencode", "auth.json"),
+    // macOS/Linux
+    path.join(homeDir, ".opencode", "auth", "openai.json"),
+    // Legacy fallback
+    path.join(process.cwd(), "data", "auth.json"),
+  ];
+};
 
 export type OpenAIOAuthTokens = {
   accessToken: string;
@@ -71,60 +83,67 @@ const parseJwtExp = (token?: string) => {
 };
 
 const loadCodexTokens = async () => {
-  try {
-    const raw = await fs.readFile(CODEX_STORE_PATH, "utf8");
-    const codex = JSON.parse(raw) as {
-      openai?: {
-        access?: string;
-        refresh?: string;
-        expires?: number;
-        accountId?: string;
-        idToken?: string;
+  const paths = getCodexStorePaths();
+
+  for (const codexPath of paths) {
+    try {
+      const raw = await fs.readFile(codexPath, "utf8");
+      const codex = JSON.parse(raw) as {
+        openai?: {
+          access?: string;
+          refresh?: string;
+          expires?: number;
+          accountId?: string;
+          idToken?: string;
+        };
+        tokens?: {
+          access_token?: string;
+          refresh_token?: string;
+          id_token?: string;
+          account_id?: string;
+        };
+        last_refresh?: string;
       };
-      tokens?: {
-        access_token?: string;
-        refresh_token?: string;
-        id_token?: string;
-        account_id?: string;
-      };
-      last_refresh?: string;
-    };
 
-    if (codex.openai?.access) {
-      const now = Date.now();
-      const createdAt = codex.last_refresh ? Date.parse(codex.last_refresh) : now;
-      return {
-        accessToken: codex.openai.access,
-        refreshToken: codex.openai.refresh,
-        expiresAt: codex.openai.expires ?? parseJwtExp(codex.openai.access),
-        accountId: codex.openai.accountId,
-        idToken: codex.openai.idToken,
-        createdAt: Number.isNaN(createdAt) ? now : createdAt,
-        updatedAt: now,
-      } as OpenAIOAuthTokens;
-    }
+      if (codex.openai?.access) {
+        const now = Date.now();
+        const createdAt = codex.last_refresh ? Date.parse(codex.last_refresh) : now;
+        return {
+          accessToken: codex.openai.access,
+          refreshToken: codex.openai.refresh,
+          expiresAt: codex.openai.expires ?? parseJwtExp(codex.openai.access),
+          accountId: codex.openai.accountId,
+          idToken: codex.openai.idToken,
+          createdAt: Number.isNaN(createdAt) ? now : createdAt,
+          updatedAt: now,
+        } as OpenAIOAuthTokens;
+      }
 
-    if (codex.tokens?.access_token) {
-      const now = Date.now();
-      const createdAt = codex.last_refresh ? Date.parse(codex.last_refresh) : now;
-      return {
-        accessToken: codex.tokens.access_token,
-        refreshToken: codex.tokens.refresh_token,
-        idToken: codex.tokens.id_token,
-        accountId: codex.tokens.account_id,
-        expiresAt: parseJwtExp(codex.tokens.access_token),
-        createdAt: Number.isNaN(createdAt) ? now : createdAt,
-        updatedAt: now,
-      } as OpenAIOAuthTokens;
-    }
+      if (codex.tokens?.access_token) {
+        const now = Date.now();
+        const createdAt = codex.last_refresh ? Date.parse(codex.last_refresh) : now;
+        return {
+          accessToken: codex.tokens.access_token,
+          refreshToken: codex.tokens.refresh_token,
+          idToken: codex.tokens.id_token,
+          accountId: codex.tokens.account_id,
+          expiresAt: parseJwtExp(codex.tokens.access_token),
+          createdAt: Number.isNaN(createdAt) ? now : createdAt,
+          updatedAt: now,
+        } as OpenAIOAuthTokens;
+      }
 
-    return null;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-      return null;
+      // Found file but no valid tokens, continue to next path
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        // File doesn't exist, try next path
+        continue;
+      }
+      throw error;
     }
-    throw error;
   }
+
+  return null;
 };
 
 export const importCodexTokensIfNeeded = async (force = false) => {
