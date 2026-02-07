@@ -234,6 +234,11 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
           aspectRatio: "1:1",
           resolution: "1K",
           model: "nano-banana-pro",
+          selectedModel: {
+            provider: "gemini",
+            modelId: "nano-banana-pro",
+            displayName: "Nano Banana Pro",
+          },
           useGoogleSearch: false,
         },
         childNodeIds: [],

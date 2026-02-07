@@ -1881,21 +1881,32 @@ async function generateWithKie(
           }
           handledImageKeys.add(key);
         } else if (Array.isArray(value)) {
-          // Array of values - check if they're data URLs that need uploading
-          const processedArray: string[] = [];
-          for (const item of value) {
-            if (typeof item === 'string' && item.startsWith('data:image')) {
-              const url = await uploadImageToKie(requestId, apiKey, item);
-              processedArray.push(url);
-            } else if (typeof item === 'string' && item.startsWith('http')) {
-              processedArray.push(item);
-            } else if (typeof item === 'string') {
-              processedArray.push(item);
+          // Check if this is a text parameter (prompt, negative_prompt, etc.)
+          // Text parameters should be joined into a single string, not kept as arrays
+          const textParams = ['prompt', 'negative_prompt', 'caption', 'text', 'description', 'query'];
+          if (textParams.includes(key)) {
+            // Join multiple text inputs with newlines
+            const textValue = value.filter(item => typeof item === 'string' && item.trim() !== '').join('\n');
+            if (textValue) {
+              inputParams[key] = textValue;
             }
-          }
-          if (processedArray.length > 0) {
-            inputParams[key] = processedArray;
-            handledImageKeys.add(key);
+          } else {
+            // Array of values - check if they're data URLs that need uploading
+            const processedArray: string[] = [];
+            for (const item of value) {
+              if (typeof item === 'string' && item.startsWith('data:image')) {
+                const url = await uploadImageToKie(requestId, apiKey, item);
+                processedArray.push(url);
+              } else if (typeof item === 'string' && item.startsWith('http')) {
+                processedArray.push(item);
+              } else if (typeof item === 'string') {
+                processedArray.push(item);
+              }
+            }
+            if (processedArray.length > 0) {
+              inputParams[key] = processedArray;
+              handledImageKeys.add(key);
+            }
           }
         } else {
           inputParams[key] = value;

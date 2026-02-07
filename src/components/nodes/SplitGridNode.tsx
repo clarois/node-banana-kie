@@ -127,7 +127,14 @@ export function SplitGridNode({ id, data, selected }: NodeProps<SplitGridNodeTyp
 
         {/* Config summary */}
         <div className="flex items-center justify-between text-[10px] text-neutral-400 shrink-0">
-          <span>{nodeData.gridRows}x{nodeData.gridCols} grid ({nodeData.targetCount} images)</span>
+          <div className="flex items-center gap-1">
+            <span>{nodeData.gridRows}x{nodeData.gridCols} grid ({nodeData.targetCount} images)</span>
+            {nodeData.generateSettings.selectedModel && nodeData.generateSettings.selectedModel.provider !== "gemini" && (
+              <span className="text-amber-500 font-medium opacity-80">
+                [{nodeData.generateSettings.selectedModel.provider === "kie" ? "Kie.ai" : nodeData.generateSettings.selectedModel.provider}]
+              </span>
+            )}
+          </div>
           <button
             onClick={handleOpenSettings}
             className="text-blue-400 hover:text-blue-300 transition-colors"

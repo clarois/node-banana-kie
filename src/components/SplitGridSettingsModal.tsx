@@ -1,8 +1,21 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useWorkflowStore } from "@/store/workflowStore";
-import { SplitGridNodeData, AspectRatio, Resolution, ModelType } from "@/types";
+import { SplitGridNodeData, AspectRatio, Resolution, ModelType, SelectedModel, ProviderType } from "@/types";
+import { ModelSearchDialog } from "@/components/modals/ModelSearchDialog";
+import { ProviderModel } from "@/lib/providers/types";
+
+// Provider badge component (simplified for modal)
+function ProviderBadge({ provider }: { provider: ProviderType }) {
+  if (provider === "gemini") return null;
+  const providerName = provider === "kie" ? "Kie.ai" : provider === "replicate" ? "Replicate" : provider === "fal" ? "fal.ai" : provider;
+  return (
+    <span className="px-1.5 py-0.5 rounded bg-neutral-700 text-[10px] text-neutral-400 font-medium mr-2">
+      {providerName}
+    </span>
+  );
+}
 
 interface SplitGridSettingsModalProps {
   nodeId: string;
@@ -14,16 +27,19 @@ const TARGET_COUNT_OPTIONS = [4, 5, 6, 8, 9, 10] as const;
 
 const ASPECT_RATIOS: AspectRatio[] = ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"];
 const RESOLUTIONS: Resolution[] = ["1K", "2K", "4K"];
-const MODELS: { value: ModelType; label: string }[] = [
-  { value: "nano-banana", label: "Nano Banana" },
-  { value: "nano-banana-pro", label: "Nano Banana Pro" },
+const MODELS: { value: string; label: string; provider: ProviderType; modelId: string; recommended?: boolean }[] = [
+  { value: "nano-banana-pro-kie", label: "Nano Banana Pro (Kie.ai)", provider: "kie", modelId: "nano-banana-pro", recommended: true },
+  { value: "flux-2-pro-kie", label: "FLUX.2 Pro (Kie.ai)", provider: "kie", modelId: "flux-2/pro-text-to-image" },
+  { value: "seedream-kie", label: "Seedream 4.5 (Kie.ai)", provider: "kie", modelId: "seedream/4.5-text-to-image" },
+  { value: "nano-banana-pro", label: "Nano Banana Pro (Gemini)", provider: "gemini", modelId: "nano-banana-pro" },
+  { value: "nano-banana", label: "Nano Banana (Gemini)", provider: "gemini", modelId: "nano-banana" },
 ];
 
 // Calculate grid dimensions from target count
 const getGridDimensions = (count: number): { rows: number; cols: number } => {
   const grids: Record<number, { rows: number; cols: number }> = {
     4: { rows: 2, cols: 2 },
-    5: { rows: 1, cols: 5 },  // 1x5 vertical strip (e.g., for A+ content)
+    5: { rows: 1, cols: 5 },
     6: { rows: 2, cols: 3 },
     8: { rows: 2, cols: 4 },
     9: { rows: 3, cols: 3 },
@@ -42,12 +58,48 @@ export function SplitGridSettingsModal({
   const [targetCount, setTargetCount] = useState(nodeData.targetCount);
   const [defaultPrompt, setDefaultPrompt] = useState(nodeData.defaultPrompt);
   const [aspectRatio, setAspectRatio] = useState(nodeData.generateSettings.aspectRatio);
-  const [resolution, setResolution] = useState(nodeData.generateSettings.resolution);
+  const [resolution, setResolution] = useState(nodeData.generateSettings.resolution || "1K");
   const [model, setModel] = useState(nodeData.generateSettings.model);
-  const [useGoogleSearch, setUseGoogleSearch] = useState(nodeData.generateSettings.useGoogleSearch);
+  const [selectedModel, setSelectedModel] = useState<SelectedModel | undefined>(nodeData.generateSettings.selectedModel);
+  const [useGoogleSearch, setUseGoogleSearch] = useState(nodeData.generateSettings.useGoogleSearch || false);
+  const [isBrowseDialogOpen, setIsBrowseDialogOpen] = useState(false);
+
+  const currentModelValue = useMemo(() => {
+    if (!selectedModel) return model;
+    const found = MODELS.find(m => 
+      m.provider === selectedModel.provider && 
+      m.modelId === selectedModel.modelId
+    );
+    return found ? found.value : "external";
+  }, [selectedModel, model]);
 
   const { rows, cols } = getGridDimensions(targetCount);
-  const isNanoBananaPro = model === "nano-banana-pro";
+  const isNanoBananaPro = currentModelValue === "nano-banana-pro" || currentModelValue === "nano-banana-pro-kie" || 
+    (selectedModel?.provider === "gemini" && selectedModel?.modelId === "nano-banana-pro") ||
+    (selectedModel?.provider === "kie" && selectedModel?.modelId === "nano-banana-pro");
+
+  const handleBrowseModelSelect = useCallback((model: ProviderModel) => {
+    setSelectedModel({
+      provider: model.provider,
+      modelId: model.id,
+      displayName: model.name,
+    });
+    setModel(model.id as ModelType);
+    setIsBrowseDialogOpen(false);
+  }, []);
+
+  const handleGeminiModelChange = useCallback((value: string) => {
+    const config = MODELS.find(m => m.value === value);
+    
+    if (config) {
+      setSelectedModel({
+        provider: config.provider,
+        modelId: config.modelId,
+        displayName: config.label,
+      });
+      setModel(config.modelId as ModelType);
+    }
+  }, []);
 
   const handleCreate = useCallback(() => {
     const splitNode = getNodeById(nodeId);
@@ -64,7 +116,6 @@ export function SplitGridSettingsModal({
     const verticalGap = 30;
 
     // Calculate cluster dimensions
-    // Layout: imageInput on left, nanoBanana on right, prompt below imageInput
     const clusterWidth = imageInputWidth + horizontalGap + nanoBananaWidth;
     const clusterHeight = Math.max(imageInputHeight, nanoBananaHeight) + verticalGap + promptHeight;
     const clusterGap = 60;
@@ -80,40 +131,30 @@ export function SplitGridSettingsModal({
       const row = Math.floor(i / cols);
       const col = i % cols;
 
-      // Position for this cluster
       const clusterX = startX + col * (clusterWidth + clusterGap);
       const clusterY = startY + row * (clusterHeight + clusterGap);
 
-      // Create imageInput node
-      const imageInputId = addNode("imageInput", {
-        x: clusterX,
-        y: clusterY,
-      });
-
-      // Create nanoBanana node (to the right of imageInput)
+      const imageInputId = addNode("imageInput", { x: clusterX, y: clusterY });
       const nanoBananaId = addNode("nanoBanana", {
         x: clusterX + imageInputWidth + horizontalGap,
         y: clusterY,
       });
 
-      // Update nanoBanana settings
       updateNodeData(nanoBananaId, {
         aspectRatio,
         resolution,
         model,
+        selectedModel,
         useGoogleSearch,
       });
 
-      // Create prompt node (below imageInput)
       const promptId = addNode("prompt", {
         x: clusterX,
         y: clusterY + Math.max(imageInputHeight, nanoBananaHeight) + verticalGap,
       });
 
-      // Update prompt with default text
       updateNodeData(promptId, { prompt: defaultPrompt });
 
-      // Create connections: imageInput -> nanoBanana, prompt -> nanoBanana
       onConnect({
         source: imageInputId,
         sourceHandle: "image",
@@ -128,7 +169,6 @@ export function SplitGridSettingsModal({
         targetHandle: "text",
       });
 
-      // Create reference edge from split node to imageInput (grey dotted line)
       addEdgeWithType({
         source: nodeId,
         sourceHandle: "reference",
@@ -143,14 +183,14 @@ export function SplitGridSettingsModal({
       });
     }
 
-    // Update split node with configuration
     updateNodeData(nodeId, {
       targetCount,
       defaultPrompt,
       generateSettings: {
+        model,
+        selectedModel,
         aspectRatio,
         resolution,
-        model,
         useGoogleSearch,
       },
       childNodeIds,
@@ -162,7 +202,7 @@ export function SplitGridSettingsModal({
     onClose();
   }, [
     nodeId, targetCount, defaultPrompt, aspectRatio, resolution,
-    model, useGoogleSearch, rows, cols, getNodeById, addNode,
+    model, selectedModel, useGoogleSearch, rows, cols, getNodeById, addNode,
     updateNodeData, onConnect, addEdgeWithType, onClose
   ]);
 
@@ -183,7 +223,6 @@ export function SplitGridSettingsModal({
         </h2>
 
         <div className="space-y-4">
-          {/* Target count selector with visual preview */}
           <div>
             <label className="block text-sm text-neutral-400 mb-2">
               Number of Images
@@ -227,7 +266,6 @@ export function SplitGridSettingsModal({
             </p>
           </div>
 
-          {/* Default prompt */}
           <div>
             <label className="block text-sm text-neutral-400 mb-1">
               Default Prompt
@@ -239,36 +277,54 @@ export function SplitGridSettingsModal({
               rows={3}
               className="w-full px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-neutral-100 text-sm focus:outline-none focus:border-neutral-500 resize-none"
             />
-            <p className="text-xs text-neutral-500 mt-1">
-              Each prompt node can be edited individually after creation
-            </p>
           </div>
 
-          {/* Generate settings */}
           <div>
-            <label className="block text-sm text-neutral-400 mb-2">
-              Generate Node Settings
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-sm text-neutral-400">
+                Generate Node Settings
+              </label>
+              <button
+                onClick={() => setIsBrowseDialogOpen(true)}
+                className="text-[10px] py-1 px-2 bg-neutral-700 hover:bg-neutral-600 border border-neutral-600 rounded text-neutral-300 transition-colors"
+              >
+                Browse All Models
+              </button>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">
-                  Model
-                </label>
-                <select
-                  value={model}
-                  onChange={(e) => setModel(e.target.value as ModelType)}
-                  className="w-full px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-neutral-100 text-sm focus:outline-none focus:border-neutral-500"
-                >
-                  {MODELS.map((m) => (
-                    <option key={m.value} value={m.value}>{m.label}</option>
-                  ))}
-                </select>
+                <label className="block text-xs text-neutral-500 mb-1">Model</label>
+                <div className="flex flex-col gap-1">
+                  <select
+                    value={currentModelValue}
+                    onChange={(e) => handleGeminiModelChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-neutral-900 border border-neutral-600 rounded text-neutral-100 text-sm focus:outline-none focus:border-neutral-500"
+                  >
+                    {MODELS.map((m) => (
+                      <option key={m.value} value={m.value}>
+                        {m.recommended && "⭐ "}{m.label}
+                      </option>
+                    ))}
+                    {currentModelValue === "external" && (
+                      <option value="external">{selectedModel?.displayName || "Custom Model"}</option>
+                    )}
+                  </select>
+                  {selectedModel && (
+                    <div className="flex items-center">
+                      <ProviderBadge provider={selectedModel.provider} />
+                      <span className="text-[10px] text-neutral-500 truncate">{selectedModel.modelId}</span>
+                    </div>
+                  )}
+                  {selectedModel?.provider === "kie" && (
+                    <p className="text-[10px] text-neutral-400 mt-1">
+                      Using Kie.ai backend with your configured API key
+                    </p>
+                  )}
+                </div>
               </div>
 
               <div>
-                <label className="block text-xs text-neutral-500 mb-1">
-                  Aspect Ratio
-                </label>
+                <label className="block text-xs text-neutral-500 mb-1">Aspect Ratio</label>
                 <select
                   value={aspectRatio}
                   onChange={(e) => setAspectRatio(e.target.value as AspectRatio)}
@@ -283,9 +339,7 @@ export function SplitGridSettingsModal({
               {isNanoBananaPro && (
                 <>
                   <div>
-                    <label className="block text-xs text-neutral-500 mb-1">
-                      Resolution
-                    </label>
+                    <label className="block text-xs text-neutral-500 mb-1">Resolution</label>
                     <select
                       value={resolution}
                       onChange={(e) => setResolution(e.target.value as Resolution)}
@@ -329,6 +383,15 @@ export function SplitGridSettingsModal({
           </button>
         </div>
       </div>
+
+      {isBrowseDialogOpen && (
+        <ModelSearchDialog
+          isOpen={isBrowseDialogOpen}
+          onClose={() => setIsBrowseDialogOpen(false)}
+          onModelSelected={handleBrowseModelSelect}
+          initialCapabilityFilter="image"
+        />
+      )}
     </div>
   );
 }

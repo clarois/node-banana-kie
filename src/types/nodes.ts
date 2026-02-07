@@ -350,10 +350,11 @@ export interface SplitGridNodeData extends BaseNodeData {
   targetCount: number; // 4, 6, 8, 9, or 10
   defaultPrompt: string;
   generateSettings: {
-    aspectRatio: AspectRatio;
-    resolution: Resolution;
-    model: ModelType;
-    useGoogleSearch: boolean;
+    model: string;
+    selectedModel?: SelectedModel;
+    aspectRatio: string;
+    resolution?: Resolution;
+    useGoogleSearch?: boolean;
   };
   childNodeIds: Array<{
     imageInput: string;
