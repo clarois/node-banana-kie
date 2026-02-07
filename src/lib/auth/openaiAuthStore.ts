@@ -127,7 +127,7 @@ const loadCodexTokens = async () => {
   }
 };
 
-const importCodexTokensIfNeeded = async (force = false) => {
+export const importCodexTokensIfNeeded = async (force = false) => {
   const store = await readStore();
   if (!force && store.tokens?.accessToken) {
     return store.tokens;

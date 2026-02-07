@@ -196,7 +196,11 @@ export function ProjectSetupModal({
     try {
       const response = await fetch("/api/auth/openai/start");
       const result = await response.json();
-      if (result?.url) {
+      if (result?.success && result?.connected) {
+        // Tokens imported from Codex without browser flow
+        setOpenaiAuthStatus({ connected: true });
+      } else if (result?.url) {
+        // Browser OAuth flow required
         window.open(result.url, "_blank", "noopener,noreferrer");
       }
     } catch {
