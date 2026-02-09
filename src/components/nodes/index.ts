@@ -4,6 +4,7 @@ export { AnnotationNode } from "./AnnotationNode";
 export { PromptNode } from "./PromptNode";
 export { PromptConstructorNode } from "./PromptConstructorNode";
 export { GenerateImageNode, NanoBananaNode } from "./GenerateImageNode";
+export { NanoBananaEditNode } from "./NanoBananaEditNode";
 export { GenerateVideoNode } from "./GenerateVideoNode";
 export { SoraStoryboardNode } from "./SoraStoryboardNode";
 export { VeoReferenceVideoNode } from "./VeoReferenceVideoNode";
