@@ -152,11 +152,20 @@ const KIE_MODELS: ProviderModel[] = [
   {
     id: "google/nano-banana-edit",
     name: "Nano Banana Edit",
-    description: "Google Gemini image editing via Kie.ai. Supports image-to-image editing with up to 10 input images.",
+    description: "Image editing using Nano Banana model via Kie.ai.",
     provider: "kie",
     capabilities: ["image-to-image"],
     coverImage: undefined,
     pageUrl: "https://docs.kie.ai/market/google/nano-banana-edit",
+  },
+  {
+    id: "google/nano-banana",
+    name: "Nano Banana",
+    description: "Fast image generation using Gemini 2.5 Flash via Kie.ai. Supports text-to-image with aspect ratio control.",
+    provider: "kie",
+    capabilities: ["text-to-image"],
+    coverImage: undefined,
+    pageUrl: "https://docs.kie.ai/market/google/nano-banana",
   },
   {
     id: "grok-imagine/text-to-image",

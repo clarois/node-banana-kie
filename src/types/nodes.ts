@@ -29,7 +29,6 @@ export type NodeType =
   | "prompt"
   | "promptConstructor"
   | "nanoBanana"
-  | "nanoBananaEdit"
   | "generateVideo"
   | "soraStoryboard"
   | "veoReferenceVideo"
@@ -154,25 +153,6 @@ export interface NanoBananaNodeData extends BaseNodeData {
   selectedModel?: SelectedModel; // Multi-provider model selection (optional for backward compat)
   useGoogleSearch: boolean; // Only available for Nano Banana Pro
   parameters?: Record<string, unknown>; // Model-specific parameters for external providers
-  inputSchema?: ModelInputDef[]; // Model's input schema for dynamic handles
-  status: NodeStatus;
-  error: string | null;
-  imageHistory: CarouselImageItem[]; // Carousel history (IDs only)
-  selectedHistoryIndex: number; // Currently selected image in carousel
-}
-
-/**
- * Nano Banana Edit node - AI image editing via Kie.ai
- */
-export interface NanoBananaEditNodeData extends BaseNodeData {
-  inputImages: string[]; // Images to edit (max 10)
-  inputImageRefs?: string[]; // External image references for storage optimization
-  inputPrompt: string | null; // Editing instructions
-  outputImage: string | null;
-  outputImageRef?: string; // External image reference for storage optimization
-  aspectRatio: AspectRatio;
-  outputFormat: "png" | "jpeg";
-  parameters?: Record<string, unknown>; // Model-specific parameters
   inputSchema?: ModelInputDef[]; // Model's input schema for dynamic handles
   status: NodeStatus;
   error: string | null;
@@ -398,7 +378,6 @@ export type WorkflowNodeData =
   | PromptNodeData
   | PromptConstructorNodeData
   | NanoBananaNodeData
-  | NanoBananaEditNodeData
   | GenerateVideoNodeData
   | SoraStoryboardNodeData
   | VeoReferenceVideoNodeData

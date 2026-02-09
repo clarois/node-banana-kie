@@ -6,7 +6,6 @@ import {
   PromptNodeData,
   PromptConstructorNodeData,
   NanoBananaNodeData,
-  NanoBananaEditNodeData,
   GenerateVideoNodeData,
   VeoReferenceVideoNodeData,
   VeoExtendVideoNodeData,
@@ -36,7 +35,6 @@ export const defaultNodeDimensions: Record<NodeType, { width: number; height: nu
   prompt: { width: 320, height: 220 },
   promptConstructor: { width: 340, height: 280 },
   nanoBanana: { width: 300, height: 300 },
-  nanoBananaEdit: { width: 300, height: 300 },
   generateVideo: { width: 300, height: 300 },
   soraStoryboard: { width: 400, height: 480 },
   veoReferenceVideo: { width: 320, height: 300 },
@@ -141,20 +139,6 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         imageHistory: [],
         selectedHistoryIndex: 0,
       } as NanoBananaNodeData;
-    }
-    case "nanoBananaEdit": {
-      return {
-        inputImages: [],
-        inputPrompt: null,
-        outputImage: null,
-        aspectRatio: "1:1",
-        outputFormat: "png",
-        parameters: {},
-        status: "idle",
-        error: null,
-        imageHistory: [],
-        selectedHistoryIndex: 0,
-      } as NanoBananaEditNodeData;
     }
     case "generateVideo": {
       const nodeDefaults = loadNodeDefaults();

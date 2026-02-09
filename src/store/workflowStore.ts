@@ -19,7 +19,6 @@ import {
   PromptNodeData,
   PromptConstructorNodeData,
   NanoBananaNodeData,
-  NanoBananaEditNodeData,
   GenerateVideoNodeData,
   VeoReferenceVideoNodeData,
   VeoExtendVideoNodeData,
@@ -39,7 +38,6 @@ import {
   OutputGalleryNodeData,
   VideoStitchNodeData,
   EaseCurveNodeData,
-  ModelType,
 } from "@/types";
 import { useToast } from "@/components/Toast";
 import { calculateGenerationCost } from "@/utils/costCalculator";
@@ -1573,160 +1571,6 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
               logger.error('node.error', 'Generate node execution failed', {
                 nodeId: node.id,
                 provider: errorProvider,
-                errorMessage,
-              }, error instanceof Error ? error : undefined);
-
-              updateNodeData(node.id, {
-                status: "error",
-                error: errorMessage,
-              });
-              if (error instanceof DOMException && error.name === 'AbortError') throw error;
-              throw new Error(errorMessage);
-            }
-            break;
-          }
-
-          case "nanoBananaEdit": {
-            const { images, text, dynamicInputs } = getConnectedInputs(node.id);
-
-            // Validate that we have images to edit and a prompt
-            if (images.length === 0) {
-              logger.error('node.error', 'nanoBananaEdit node missing image inputs', {
-                nodeId: node.id,
-              });
-              updateNodeData(node.id, {
-                status: "error",
-                error: "Image input is required for editing",
-              });
-              throw new Error("Image input is required for editing");
-            }
-
-            if (!text) {
-              logger.error('node.error', 'nanoBananaEdit node missing prompt', {
-                nodeId: node.id,
-              });
-              updateNodeData(node.id, {
-                status: "error",
-                error: "Prompt is required for editing",
-              });
-              throw new Error("Prompt is required for editing");
-            }
-
-            // Get fresh node data from store
-            const freshEditNode = get().nodes.find((n) => n.id === node.id);
-            const nodeData = (freshEditNode?.data || node.data) as NanoBananaEditNodeData;
-
-            // Update node with input data
-            updateNodeData(node.id, {
-              inputImages: images,
-              inputPrompt: text,
-              status: "loading",
-              error: null,
-            });
-
-            // Build request payload
-            const payload: Record<string, unknown> = {
-              images,
-              prompt: text,
-              aspectRatio: nodeData.aspectRatio,
-              outputFormat: nodeData.outputFormat,
-              modelId: "google/nano-banana-edit",
-              provider: "kie",
-              parameters: nodeData.parameters || {},
-              dynamicInputs,
-            };
-
-            try {
-              const response = await fetch("/api/generate", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
-                signal: abortController.signal,
-              });
-
-              if (!response.ok) {
-                const errorData = await response.json().catch(() => ({ error: "Request failed" }));
-                throw new Error(errorData.error || `Request failed: ${response.status}`);
-              }
-
-              const result = await response.json();
-
-              if (result.success && result.image) {
-                const timestamp = Date.now();
-                const imageId = `${timestamp}`;
-
-                // Save to global history
-                get().addToGlobalHistory({
-                  image: result.image,
-                  timestamp,
-                  prompt: text,
-                  aspectRatio: nodeData.aspectRatio,
-                  model: "nano-banana-pro",
-                });
-
-                // Add to node's carousel history
-                const newHistoryItem = {
-                  id: imageId,
-                  timestamp,
-                  prompt: text,
-                  aspectRatio: nodeData.aspectRatio,
-                  model: "nano-banana" as ModelType, // Use compatible model type for history
-                };
-                const updatedHistory = [newHistoryItem, ...(nodeData.imageHistory || [])];
-
-                updateNodeData(node.id, {
-                  outputImage: result.image,
-                  status: "complete",
-                  error: null,
-                  imageHistory: updatedHistory,
-                  selectedHistoryIndex: 0,
-                });
-
-                // Push to connected outputGallery nodes
-                get().edges
-                  .filter(e => e.source === node.id)
-                  .forEach(e => {
-                    const target = get().nodes.find(n => n.id === e.target);
-                    if (target?.type === "outputGallery") {
-                      const gData = target.data as OutputGalleryNodeData;
-                      updateNodeData(target.id, {
-                        images: [result.image, ...(gData.images || [])],
-                      });
-                    }
-                  });
-
-                // Auto-save to generations folder if configured
-                const genPath = get().generationsPath;
-                if (genPath) {
-                  trackSaveGeneration(genPath, { image: result.image }, text, imageId, node.id, 'image', get, updateNodeData);
-                }
-              } else {
-                logger.error('api.error', 'Kie API edit failed', {
-                  nodeId: node.id,
-                  error: result.error,
-                });
-                updateNodeData(node.id, {
-                  status: "error",
-                  error: result.error || "Image edit failed",
-                });
-                throw new Error(result.error || "Image edit failed");
-              }
-            } catch (error) {
-              let errorMessage = "Image edit failed";
-              if (error instanceof DOMException && error.name === 'AbortError') {
-                errorMessage = "Request timed out. Try reducing image sizes or using a simpler prompt.";
-              } else if (error instanceof TypeError && error.message.includes('NetworkError')) {
-                errorMessage = "Network error. Check your connection and try again.";
-              } else if (error instanceof TypeError) {
-                errorMessage = `Network error: ${error.message}`;
-              } else if (error instanceof Error) {
-                errorMessage = error.message;
-              }
-
-              logger.error('node.error', 'NanoBananaEdit node execution failed', {
-                nodeId: node.id,
                 errorMessage,
               }, error instanceof Error ? error : undefined);
 
