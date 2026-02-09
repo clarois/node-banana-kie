@@ -332,6 +332,80 @@ function createDefaultNodeData(type: NodeType): WorkflowNodeData {
         progress: 0,
         encoderSupported: null,
       };
+    case "nanoBananaEdit":
+      return {
+        images: [],
+        prompt: "",
+        aspectRatio: "1:1",
+        outputResolution: "1K",
+        useCharacterRef: false,
+        characterRefImage: null,
+        characterRefWeight: 1.0,
+        useStyleRef: false,
+        styleRefImage: null,
+        styleRefWeight: 1.0,
+        selectedModel: "google/nano-banana-edit",
+        outputImages: [],
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    case "soraStoryboard":
+      return {
+        scenes: [{ prompt: "", duration: 15 }],
+        nFrames: "15",
+        aspectRatio: "landscape",
+        image: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    case "veoReferenceVideo":
+      return {
+        images: [],
+        prompt: "",
+        aspectRatio: "16:9",
+        duration: 5,
+        outputVideo: null,
+        outputTaskId: null,
+        selectedModel: "veo3-fast/reference-to-video",
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    case "veoExtendVideo":
+      return {
+        taskId: "",
+        prompt: "",
+        duration: 3,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    case "veo1080pVideo":
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    case "veo4kVideo":
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+        progress: 0,
+      };
+    default:
+      throw new Error(`Unknown node type: ${type}`);
   }
 }
 
