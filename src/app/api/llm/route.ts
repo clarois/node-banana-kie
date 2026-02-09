@@ -37,6 +37,10 @@ const OPENAI_MODEL_MAP: Record<string, string> = {
   "gpt-4.1-nano": "gpt-4.1-nano",
 };
 
+const KIE_MODEL_MAP: Record<string, string> = {
+  "gemini-3-pro": "gemini-3-pro",
+};
+
 async function generateWithGoogle(
   prompt: string,
   model: LLMModelType,
@@ -400,6 +404,112 @@ async function getOpenAIOAuthSession(requestId?: string) {
   return { accessToken: updatedTokens.accessToken, accountId: updatedTokens.accountId };
 }
 
+async function generateWithKie(
+  prompt: string,
+  model: LLMModelType,
+  temperature: number,
+  maxTokens: number,
+  systemPrompt: string,
+  images?: string[],
+  requestId?: string,
+  userApiKey?: string | null
+): Promise<string> {
+  // User-provided key takes precedence over env variable
+  const apiKey = userApiKey || process.env.KIE_API_KEY;
+  if (!apiKey) {
+    logger.error('api.error', 'KIE_API_KEY not configured', { requestId });
+    throw new Error("KIE_API_KEY not configured. Add it to .env.local or configure in Settings.");
+  }
+
+  const modelId = KIE_MODEL_MAP[model];
+
+  logger.info('api.llm', 'Calling Kie.ai API', {
+    requestId,
+    model: modelId,
+    temperature,
+    maxTokens,
+    imageCount: images?.length || 0,
+    promptLength: prompt.length,
+  });
+
+  // Build messages array with system and user messages
+  const messages: Array<{ role: string; content: string | Array<{ type: string; text?: string; image_url?: { url: string } }> }> = [
+    { role: "system", content: systemPrompt },
+  ];
+
+  // Build user content - either text-only or multimodal
+  if (images && images.length > 0) {
+    const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [
+      { type: "text", text: prompt },
+      ...images.map((img) => ({
+        type: "image_url" as const,
+        image_url: { url: img },
+      })),
+    ];
+    messages.push({ role: "user", content });
+  } else {
+    messages.push({ role: "user", content: prompt });
+  }
+
+  const startTime = Date.now();
+  
+  // Use the model-specific Kie.ai endpoint
+  const response = await fetch("https://api.kie.ai/gemini-3-pro/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: modelId,
+      messages,
+      temperature,
+      max_tokens: maxTokens,
+    }),
+  });
+  const duration = Date.now() - startTime;
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    logger.error('api.error', 'Kie.ai API request failed', {
+      requestId,
+      status: response.status,
+      error: error.error?.message,
+    });
+    throw new Error(error.error?.message || `Kie.ai API error: ${response.status}`);
+  }
+
+  const data = await response.json();
+  
+  // Check for Kie.ai error response format: {"code": 500, "msg": "..."}
+  if (data.code && data.msg) {
+    logger.error('api.error', 'Kie.ai API error', {
+      requestId,
+      code: data.code,
+      message: data.msg,
+    });
+    throw new Error(`Kie.ai error ${data.code}: ${data.msg}`);
+  }
+  
+  const text = data.choices?.[0]?.message?.content;
+
+  if (!text) {
+    logger.error('api.error', 'No text in Kie.ai response', { 
+      requestId,
+      responseData: JSON.stringify(data).slice(0, 500),
+    });
+    throw new Error("No text in Kie.ai response");
+  }
+
+  logger.info('api.llm', 'Kie.ai API response received', {
+    requestId,
+    duration,
+    responseLength: text.length,
+  });
+
+  return text;
+}
+
 export async function POST(request: NextRequest) {
   const requestId = generateRequestId();
 
@@ -407,6 +517,7 @@ export async function POST(request: NextRequest) {
     // Get user-provided API keys from headers (override env variables)
     const geminiApiKey = request.headers.get("X-Gemini-API-Key");
     const openaiApiKey = request.headers.get("X-OpenAI-API-Key");
+    const kieApiKey = request.headers.get("X-Kie-API-Key");
 
     const body: LLMGenerateRequest = await request.json();
     const {
@@ -448,6 +559,8 @@ export async function POST(request: NextRequest) {
     } else if (provider === "openai-auth") {
       const session = await getOpenAIOAuthSession(requestId);
       text = await generateWithOpenAICodex(prompt, model, temperature, maxTokens, resolvedSystemPrompt, images, requestId, session);
+    } else if (provider === "kie") {
+      text = await generateWithKie(prompt, model, temperature, maxTokens, resolvedSystemPrompt, images, requestId, kieApiKey);
     } else {
       logger.warn('api.llm', 'Unknown provider requested', { requestId, provider });
       return NextResponse.json<LLMGenerateResponse>(

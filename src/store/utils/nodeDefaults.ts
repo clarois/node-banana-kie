@@ -162,6 +162,7 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         outputVideo: null,
         outputTaskId: null,
         selectedModel: nodeDefaults.generateVideo?.selectedModel,
+        aspectRatio: "16:9",
         status: "idle",
         error: null,
         videoHistory: [],
@@ -185,6 +186,7 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
       return {
         inputImages: [],
         inputPrompt: null,
+        aspectRatio: "16:9",
         outputVideo: null,
         outputTaskId: null,
         parameters: {},

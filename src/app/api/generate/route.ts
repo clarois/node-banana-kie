@@ -2970,7 +2970,7 @@ export async function POST(request: NextRequest) {
             prompt: resolvedPrompt,
             imageUrls,
             model: "veo3_fast",
-            aspect_ratio: "16:9",
+            aspect_ratio: aspectRatio || "16:9",
             generationType: "REFERENCE_2_VIDEO",
             enableTranslation,
           };

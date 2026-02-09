@@ -189,6 +189,7 @@ export interface GenerateVideoNodeData extends BaseNodeData {
   outputVideoRef?: string; // External video reference for storage optimization
   outputTaskId?: string | null; // Task ID for chaining Veo operations
   selectedModel?: SelectedModel; // Required for video generation (no legacy fallback)
+  aspectRatio: "16:9" | "9:16"; // Video aspect ratio
   parameters?: Record<string, unknown>; // Model-specific parameters
   inputSchema?: ModelInputDef[]; // Model's input schema for dynamic handles
   status: NodeStatus;
@@ -204,6 +205,7 @@ export interface VeoReferenceVideoNodeData extends BaseNodeData {
   inputImages: string[];
   inputImageRefs?: string[];
   inputPrompt: string | null;
+  aspectRatio: "16:9" | "9:16";
   outputVideo: string | null;
   outputVideoRef?: string;
   outputTaskId?: string | null;

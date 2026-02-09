@@ -1629,6 +1629,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 images,
                 prompt: text,
                 selectedModel: nodeData.selectedModel,
+                aspectRatio: nodeData.aspectRatio,
                 parameters: nodeData.parameters,
                 dynamicInputs,  // Pass dynamic inputs for schema-mapped connections
                 mediaType: "video" as const,  // Signal to API to use queue for long-running video generation
@@ -1853,7 +1854,10 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 body: JSON.stringify({
                   prompt: promptText,
                   images,
-                  parameters: nodeData.parameters,
+                  parameters: {
+                    ...nodeData.parameters,
+                    aspect_ratio: nodeData.aspectRatio,
+                  },
                   veoOperation: "reference",
                   mediaType: "video" as const,
                 }),
