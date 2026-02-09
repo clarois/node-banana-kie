@@ -13,13 +13,25 @@ interface ValidationResult {
 
 const VALID_NODE_TYPES: NodeType[] = [
   "imageInput",
+  "audioInput",
   "annotation",
   "prompt",
+  "promptConstructor",
   "nanoBanana",
+  "nanoBananaEdit",
   "generateVideo",
   "llmGenerate",
   "splitGrid",
   "output",
+  "outputGallery",
+  "imageCompare",
+  "videoStitch",
+  "easeCurve",
+  "soraStoryboard",
+  "veoReferenceVideo",
+  "veoExtendVideo",
+  "veo1080pVideo",
+  "veo4kVideo",
 ];
 
 const VALID_HANDLE_TYPES = ["image", "text", "reference"];
@@ -32,6 +44,7 @@ const DEFAULT_DIMENSIONS: Record<NodeType, { width: number; height: number }> = 
   prompt: { width: 320, height: 220 },
   promptConstructor: { width: 340, height: 280 },
   nanoBanana: { width: 300, height: 300 },
+  nanoBananaEdit: { width: 300, height: 340 },
   generateVideo: { width: 300, height: 300 },
   llmGenerate: { width: 320, height: 360 },
   splitGrid: { width: 300, height: 320 },
@@ -40,6 +53,11 @@ const DEFAULT_DIMENSIONS: Record<NodeType, { width: number; height: number }> = 
   imageCompare: { width: 400, height: 360 },
   videoStitch: { width: 400, height: 280 },
   easeCurve: { width: 340, height: 480 },
+  soraStoryboard: { width: 400, height: 480 },
+  veoReferenceVideo: { width: 300, height: 320 },
+  veoExtendVideo: { width: 300, height: 320 },
+  veo1080pVideo: { width: 300, height: 320 },
+  veo4kVideo: { width: 300, height: 320 },
 };
 
 /**
