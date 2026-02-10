@@ -12,27 +12,7 @@ echo Dependencies installed successfully!
 echo =========================================
 echo.
 echo.
-echo Running npm run build...
-call npm run build
-set BUILD_STATUS=%errorlevel%
-echo.
-echo =========================================
-echo Build completed with exit code: %BUILD_STATUS%
-echo =========================================
-echo.
+echo Starting server...
+call npm run dev
 
-if %BUILD_STATUS% neq 0 (
-    echo Build failed!
-    pause
-    exit /b 1
-)
 
-echo.
-echo =========================================
-echo Build successful! Starting dev server...
-echo =========================================
-echo.
-
-start npm run dev
-
-exit
