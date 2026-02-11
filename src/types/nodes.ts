@@ -29,7 +29,6 @@ export type NodeType =
   | "prompt"
   | "promptConstructor"
   | "nanoBanana"
-  | "nanoBananaEdit"
   | "generateVideo"
   | "soraStoryboard"
   | "veoReferenceVideo"
@@ -162,23 +161,6 @@ export interface NanoBananaNodeData extends BaseNodeData {
 }
 
 /**
- * Nano Banana Edit node - AI image editing
- */
-export interface NanoBananaEditNodeData extends BaseNodeData {
-  inputImages: string[]; // Input images to edit
-  inputImageRefs?: string[]; // External image references for storage optimization
-  inputPrompt: string | null; // Editing instructions
-  outputImage: string | null;
-  outputImageRef?: string; // External image reference for storage optimization
-  aspectRatio: AspectRatio;
-  outputFormat: string; // png or jpeg
-  status: NodeStatus;
-  error: string | null;
-  imageHistory: CarouselImageItem[]; // Carousel history (IDs only)
-  selectedHistoryIndex: number; // Currently selected image in carousel
-}
-
-/**
  * Generate Video node - AI video generation
  */
 export interface GenerateVideoNodeData extends BaseNodeData {
@@ -189,7 +171,6 @@ export interface GenerateVideoNodeData extends BaseNodeData {
   outputVideoRef?: string; // External video reference for storage optimization
   outputTaskId?: string | null; // Task ID for chaining Veo operations
   selectedModel?: SelectedModel; // Required for video generation (no legacy fallback)
-  aspectRatio: "16:9" | "9:16"; // Video aspect ratio
   parameters?: Record<string, unknown>; // Model-specific parameters
   inputSchema?: ModelInputDef[]; // Model's input schema for dynamic handles
   status: NodeStatus;
@@ -205,7 +186,6 @@ export interface VeoReferenceVideoNodeData extends BaseNodeData {
   inputImages: string[];
   inputImageRefs?: string[];
   inputPrompt: string | null;
-  aspectRatio: "16:9" | "9:16";
   outputVideo: string | null;
   outputVideoRef?: string;
   outputTaskId?: string | null;
@@ -398,7 +378,6 @@ export type WorkflowNodeData =
   | PromptNodeData
   | PromptConstructorNodeData
   | NanoBananaNodeData
-  | NanoBananaEditNodeData
   | GenerateVideoNodeData
   | SoraStoryboardNodeData
   | VeoReferenceVideoNodeData

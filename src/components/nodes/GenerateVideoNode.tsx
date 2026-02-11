@@ -608,20 +608,6 @@ export function GenerateVideoNode({ id, data, selected }: NodeProps<GenerateVide
             TaskId: {nodeData.outputTaskId}
           </div>
         )}
-
-        {/* Aspect Ratio Selector */}
-        <div className="flex items-center gap-2">
-          <label className="text-[10px] text-neutral-400 whitespace-nowrap">Aspect Ratio:</label>
-          <select
-            value={nodeData.aspectRatio}
-            onChange={(e) => updateNodeData(id, { aspectRatio: e.target.value as "16:9" | "9:16" })}
-            className="nodrag nopan flex-1 min-w-0 bg-neutral-900/50 border border-neutral-700 rounded text-[10px] text-neutral-200 px-2 py-1 focus:outline-none focus:ring-1 focus:ring-neutral-600"
-          >
-            <option value="16:9">16:9 (Landscape)</option>
-            <option value="9:16">9:16 (Portrait)</option>
-          </select>
-        </div>
-
         {/* Preview area */}
         {nodeData.outputVideo ? (
           <>

@@ -13,25 +13,13 @@ interface ValidationResult {
 
 const VALID_NODE_TYPES: NodeType[] = [
   "imageInput",
-  "audioInput",
   "annotation",
   "prompt",
-  "promptConstructor",
   "nanoBanana",
-  "nanoBananaEdit",
   "generateVideo",
   "llmGenerate",
   "splitGrid",
   "output",
-  "outputGallery",
-  "imageCompare",
-  "videoStitch",
-  "easeCurve",
-  "soraStoryboard",
-  "veoReferenceVideo",
-  "veoExtendVideo",
-  "veo1080pVideo",
-  "veo4kVideo",
 ];
 
 const VALID_HANDLE_TYPES = ["image", "text", "reference"];
@@ -44,7 +32,6 @@ const DEFAULT_DIMENSIONS: Record<NodeType, { width: number; height: number }> = 
   prompt: { width: 320, height: 220 },
   promptConstructor: { width: 340, height: 280 },
   nanoBanana: { width: 300, height: 300 },
-  nanoBananaEdit: { width: 300, height: 340 },
   generateVideo: { width: 300, height: 300 },
   llmGenerate: { width: 320, height: 360 },
   splitGrid: { width: 300, height: 320 },
@@ -53,11 +40,6 @@ const DEFAULT_DIMENSIONS: Record<NodeType, { width: number; height: number }> = 
   imageCompare: { width: 400, height: 360 },
   videoStitch: { width: 400, height: 280 },
   easeCurve: { width: 340, height: 480 },
-  soraStoryboard: { width: 400, height: 480 },
-  veoReferenceVideo: { width: 300, height: 320 },
-  veoExtendVideo: { width: 300, height: 320 },
-  veo1080pVideo: { width: 300, height: 320 },
-  veo4kVideo: { width: 300, height: 320 },
 };
 
 /**
@@ -332,80 +314,6 @@ function createDefaultNodeData(type: NodeType): WorkflowNodeData {
         progress: 0,
         encoderSupported: null,
       };
-    case "nanoBananaEdit":
-      return {
-        images: [],
-        prompt: "",
-        aspectRatio: "1:1",
-        outputResolution: "1K",
-        useCharacterRef: false,
-        characterRefImage: null,
-        characterRefWeight: 1.0,
-        useStyleRef: false,
-        styleRefImage: null,
-        styleRefWeight: 1.0,
-        selectedModel: "google/nano-banana-edit",
-        outputImages: [],
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    case "soraStoryboard":
-      return {
-        scenes: [{ prompt: "", duration: 15 }],
-        nFrames: "15",
-        aspectRatio: "landscape",
-        image: null,
-        outputVideo: null,
-        outputTaskId: null,
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    case "veoReferenceVideo":
-      return {
-        images: [],
-        prompt: "",
-        aspectRatio: "16:9",
-        duration: 5,
-        outputVideo: null,
-        outputTaskId: null,
-        selectedModel: "veo3-fast/reference-to-video",
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    case "veoExtendVideo":
-      return {
-        taskId: "",
-        prompt: "",
-        duration: 3,
-        outputVideo: null,
-        outputTaskId: null,
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    case "veo1080pVideo":
-      return {
-        inputTaskId: null,
-        outputVideo: null,
-        outputTaskId: null,
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    case "veo4kVideo":
-      return {
-        inputTaskId: null,
-        outputVideo: null,
-        outputTaskId: null,
-        status: "idle",
-        error: null,
-        progress: 0,
-      };
-    default:
-      throw new Error(`Unknown node type: ${type}`);
   }
 }
 

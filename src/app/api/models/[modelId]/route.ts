@@ -641,6 +641,7 @@ function getKieSchema(modelId: string): ExtractedSchema {
     "grok-imagine/image-to-video": {
       parameters: [
         { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["2:3", "3:2", "1:1", "16:9", "9:16"], default: "2:3" },
+        { name: "resolution", type: "string", description: "Output resolution", enum: ["480p", "720p"], default: "480p" },
         { name: "duration", type: "string", description: "Video duration in seconds", enum: ["6", "10"], default: "6" },
         { name: "mode", type: "string", description: "Generation mode", enum: ["fun", "normal", "spicy"], default: "normal" },
         { name: "seed", type: "integer", description: "Random seed for reproducibility", minimum: 0 },

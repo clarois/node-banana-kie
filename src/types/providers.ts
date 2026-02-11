@@ -35,14 +35,13 @@ export interface ProviderSettings {
 }
 
 // LLM Provider Options
-export type LLMProvider = "google" | "openai" | "openai-auth" | "kie";
+export type LLMProvider = "google" | "openai" | "openai-auth";
 
 // LLM Model Options
 export type LLMModelType =
   | "gemini-2.5-flash"
   | "gemini-3-flash-preview"
   | "gemini-3-pro-preview"
-  | "gemini-3-pro"
   | "gpt-5.2"
   | "gpt-4.1-mini"
   | "gpt-4.1-nano";

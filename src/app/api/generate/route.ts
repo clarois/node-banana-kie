@@ -1320,6 +1320,7 @@ function getKieModelDefaults(modelId: string): Record<string, unknown> {
       aspect_ratio: "2:3",
       duration: "6",
       mode: "normal",
+      resolution: "480p",
     };
 
     // Kling 2.6 video models
