@@ -638,6 +638,7 @@ function getKieSchema(modelId: string): ExtractedSchema {
     "grok-imagine/image-to-video": {
       parameters: [
         { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["2:3", "3:2", "1:1", "16:9", "9:16"], default: "2:3" },
+        { name: "resolution", type: "string", description: "Output resolution", enum: ["480p", "720p"], default: "480p" },
         { name: "duration", type: "string", description: "Video duration in seconds", enum: ["6", "10"], default: "6" },
         { name: "mode", type: "string", description: "Generation mode", enum: ["fun", "normal", "spicy"], default: "normal" },
         { name: "seed", type: "integer", description: "Random seed for reproducibility", minimum: 0 },
@@ -1082,16 +1083,18 @@ export async function GET(
     );
   }
 
-  // Check cache
   const cacheKey = `${provider}:${decodedModelId}`;
-  const cached = schemaCache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return NextResponse.json<SchemaSuccessResponse>({
-      success: true,
-      parameters: cached.parameters,
-      inputs: cached.inputs,
-      cached: true,
-    });
+  const shouldUseCache = provider !== "kie";
+  if (shouldUseCache) {
+    const cached = schemaCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+      return NextResponse.json<SchemaSuccessResponse>({
+        success: true,
+        parameters: cached.parameters,
+        inputs: cached.inputs,
+        cached: true,
+      });
+    }
   }
 
   try {
@@ -1132,8 +1135,9 @@ export async function GET(
       result = await fetchFalSchema(decodedModelId, apiKey);
     }
 
-    // Cache the result
-    schemaCache.set(cacheKey, { ...result, timestamp: Date.now() });
+    if (shouldUseCache) {
+      schemaCache.set(cacheKey, { ...result, timestamp: Date.now() });
+    }
 
     return NextResponse.json<SchemaSuccessResponse>({
       success: true,
