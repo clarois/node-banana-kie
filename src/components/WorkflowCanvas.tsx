@@ -28,6 +28,7 @@ import {
   KlingPromptNode,
   GenerateImageNode,
   NanoBananaNode,
+  NanoBananaEditNode,
   GenerateVideoNode,
   SoraStoryboardNode,
   VeoReferenceVideoNode,
@@ -67,6 +68,7 @@ const nodeTypes: NodeTypes = {
   promptConstructor: PromptConstructorNode,
   klingPrompt: KlingPromptNode,
   nanoBanana: NanoBananaNode,
+  nanoBananaEdit: NanoBananaEditNode,
   generateVideo: GenerateVideoNode,
   soraStoryboard: SoraStoryboardNode,
   veoReferenceVideo: VeoReferenceVideoNode,
@@ -125,6 +127,8 @@ const getNodeHandles = (nodeType: string): { inputs: string[]; outputs: string[]
     case "klingPrompt":
       return { inputs: [], outputs: ["text"] };
     case "nanoBanana":
+      return { inputs: ["image", "text"], outputs: ["image"] };
+    case "nanoBananaEdit":
       return { inputs: ["image", "text"], outputs: ["image"] };
     case "generateVideo":
       return { inputs: ["image", "text"], outputs: ["video", "taskId"] };
@@ -1622,6 +1626,8 @@ export function WorkflowCanvas() {
                 return "#38bdf8";
               case "nanoBanana":
                 return "#22c55e";
+              case "nanoBananaEdit":
+                return "#10b981";
               case "generateVideo":
                 return "#9333ea";
               case "soraStoryboard":

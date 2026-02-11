@@ -132,8 +132,8 @@ export function NanoBananaEditNode({ id, data, selected }: NodeProps<NanoBananaE
           outputImage: result.imageId || result.imageUrl,
           imageHistory: [...(nodeData.imageHistory || []), newHistoryItem],
           selectedHistoryIndex: (nodeData.imageHistory?.length || 0),
-          status: 'success',
-          error: undefined,
+          status: 'complete',
+          error: null,
         });
         
         setIsLoading(false);
@@ -164,8 +164,8 @@ export function NanoBananaEditNode({ id, data, selected }: NodeProps<NanoBananaE
                   outputImage: statusData.imageId || statusData.imageUrl,
                   imageHistory: [...(nodeData.imageHistory || []), newHistoryItem],
                   selectedHistoryIndex: (nodeData.imageHistory?.length || 0),
-                  status: 'success',
-                  error: undefined,
+                  status: 'complete',
+                  error: null,
                 });
                 
                 setIsLoading(false);

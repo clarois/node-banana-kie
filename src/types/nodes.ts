@@ -30,6 +30,7 @@ export type NodeType =
   | "promptConstructor"
   | "klingPrompt"
   | "nanoBanana"
+  | "nanoBananaEdit"
   | "generateVideo"
   | "soraStoryboard"
   | "veoReferenceVideo"
@@ -193,6 +194,23 @@ export interface NanoBananaNodeData extends BaseNodeData {
   error: string | null;
   imageHistory: CarouselImageItem[]; // Carousel history (IDs only)
   selectedHistoryIndex: number; // Currently selected image in carousel
+}
+
+/**
+ * Nano Banana Edit node - AI image editing
+ */
+export interface NanoBananaEditNodeData extends BaseNodeData {
+  inputImages: string[];
+  inputImageRefs?: string[];
+  inputPrompt: string | null;
+  outputImage: string | null;
+  outputImageRef?: string;
+  aspectRatio: AspectRatio;
+  outputFormat: "png" | "jpeg";
+  status: NodeStatus;
+  error: string | null;
+  imageHistory: CarouselImageItem[];
+  selectedHistoryIndex: number;
 }
 
 /**
@@ -415,6 +433,7 @@ export type WorkflowNodeData =
   | PromptConstructorNodeData
   | KlingPromptNodeData
   | NanoBananaNodeData
+  | NanoBananaEditNodeData
   | GenerateVideoNodeData
   | SoraStoryboardNodeData
   | VeoReferenceVideoNodeData

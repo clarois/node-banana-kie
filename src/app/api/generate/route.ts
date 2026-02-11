@@ -33,6 +33,7 @@ const MODEL_MAP: Record<ModelType, string> = {
 interface MultiProviderGenerateRequest extends GenerateRequest {
   selectedModel?: SelectedModel;
   parameters?: Record<string, unknown>;
+  outputFormat?: "png" | "jpeg";
   /** Dynamic inputs from schema-based connections (e.g., image_url, tail_image_url, prompt) */
   dynamicInputs?: Record<string, unknown>;
   veoOperation?: "reference" | "extend" | "get1080p" | "get4k";
@@ -1287,6 +1288,11 @@ function getKieModelDefaults(modelId: string): Record<string, unknown> {
       return {
         aspect_ratio: "1:1",
         resolution: "1K",
+      };
+    case "google/nano-banana-edit":
+      return {
+        image_size: "1:1",
+        output_format: "png",
       };
 
     // Flux-2 models
@@ -2863,20 +2869,21 @@ export async function POST(request: NextRequest) {
 
   try {
     const body: MultiProviderGenerateRequest = await request.json();
-    const {
-      images,
-      prompt,
-      model = "nano-banana-pro",
-      aspectRatio,
-      resolution,
-      useGoogleSearch,
-      selectedModel,
-      parameters,
-      dynamicInputs,
-      mediaType,
-      taskId,
-      veoOperation,
-    } = body;
+      const {
+        images,
+        prompt,
+        model = "nano-banana-pro",
+        aspectRatio,
+        outputFormat,
+        resolution,
+        useGoogleSearch,
+        selectedModel,
+        parameters,
+        dynamicInputs,
+        mediaType,
+        taskId,
+        veoOperation,
+      } = body;
 
     // Prompt is required unless:
     // - Provided via dynamicInputs
@@ -2946,6 +2953,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
+      const resolvedParameters: Record<string, unknown> = { ...(parameters || {}) };
+      if (aspectRatio) {
+        const ratioKey = selectedModel?.modelId === "google/nano-banana-edit" ? "image_size" : "aspect_ratio";
+        resolvedParameters[ratioKey] = aspectRatio;
+      }
+      if (outputFormat) {
+        resolvedParameters.output_format = outputFormat;
+      }
+
       // Build generation input
       const genInput: GenerationInput = {
         model: {
@@ -2957,7 +2973,7 @@ export async function POST(request: NextRequest) {
         },
         prompt: prompt || "",
         images: processedImages,
-        parameters,
+        parameters: resolvedParameters,
         dynamicInputs: processedDynamicInputs,
       };
 

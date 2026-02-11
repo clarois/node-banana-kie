@@ -150,6 +150,15 @@ const KIE_MODELS: ProviderModel[] = [
     pageUrl: "https://docs.kie.ai/market/google/pro-image-to-image",
   },
   {
+    id: "google/nano-banana-edit",
+    name: "Nano Banana Edit",
+    description: "Google Nano Banana image editing via Kie.ai. Supports multi-image edits with prompt guidance.",
+    provider: "kie",
+    capabilities: ["image-to-image"],
+    coverImage: undefined,
+    pageUrl: "https://docs.kie.ai/market/google/nano-banana-edit",
+  },
+  {
     id: "grok-imagine/text-to-image",
     name: "Grok Imagine",
     description: "Grok Imagine text-to-image generation via Kie.ai.",

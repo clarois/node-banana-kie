@@ -5,6 +5,7 @@ export { PromptNode } from "./PromptNode";
 export { PromptConstructorNode } from "./PromptConstructorNode";
 export { KlingPromptNode } from "./KlingPromptNode";
 export { GenerateImageNode, NanoBananaNode } from "./GenerateImageNode";
+export { NanoBananaEditNode } from "./NanoBananaEditNode";
 export { GenerateVideoNode } from "./GenerateVideoNode";
 export { SoraStoryboardNode } from "./SoraStoryboardNode";
 export { VeoReferenceVideoNode } from "./VeoReferenceVideoNode";

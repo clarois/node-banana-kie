@@ -20,6 +20,7 @@ import {
   PromptConstructorNodeData,
   KlingPromptNodeData,
   NanoBananaNodeData,
+  NanoBananaEditNodeData,
   GenerateVideoNodeData,
   VeoReferenceVideoNodeData,
   VeoExtendVideoNodeData,
@@ -942,6 +943,8 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         return { type: "image", value: (sourceNode.data as AnnotationNodeData).outputImage };
       } else if (sourceNode.type === "nanoBanana") {
         return { type: "image", value: (sourceNode.data as NanoBananaNodeData).outputImage };
+      } else if (sourceNode.type === "nanoBananaEdit") {
+        return { type: "image", value: (sourceNode.data as NanoBananaEditNodeData).outputImage };
       } else if (sourceNode.type === "generateVideo") {
         const videoData = sourceNode.data as GenerateVideoNodeData;
         if (sourceHandle === "taskId") {
@@ -1060,7 +1063,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
     // Check each Nano Banana node has required inputs (text required, image optional)
     nodes
-      .filter((n) => n.type === "nanoBanana")
+      .filter((n) => n.type === "nanoBanana" || n.type === "nanoBananaEdit")
       .forEach((node) => {
         const textConnected = edges.some(
           (e) => e.target === node.id &&
@@ -1068,7 +1071,8 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         );
 
         if (!textConnected) {
-          errors.push(`Generate node "${node.id}" missing text input`);
+          const nodeLabel = node.type === "nanoBananaEdit" ? "Edit node" : "Generate node";
+          errors.push(`${nodeLabel} "${node.id}" missing text input`);
         }
       });
 
