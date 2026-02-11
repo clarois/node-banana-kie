@@ -13,6 +13,7 @@ const VALID_NODE_TYPES: NodeType[] = [
   "imageInput",
   "annotation",
   "prompt",
+  "klingPrompt",
   "nanoBanana",
   "generateVideo",
   "llmGenerate",
@@ -41,6 +42,10 @@ Upload or load source images. Connects its **image** output to other nodes.
 
 ### Prompt
 A text box where users write generation instructions. Connects its **text** output to Generate or LLM nodes.
+
+### Kling 3 Prompt
+Multi-shot prompt builder for Kling 3.0. Supports elements and timed shots that must total 15 seconds.
+Connects its **text** output to Generate Video.
 
 ### Generate Image (nanoBanana)
 AI image generation. Requires both an **image** connection AND a **text** connection.
@@ -205,7 +210,7 @@ export function createChatTools(nodeIds: string[]) {
                 .string()
                 .optional()
                 .describe(
-                  "Node type for addNode. Valid: imageInput, annotation, prompt, nanoBanana, generateVideo, llmGenerate, splitGrid, output"
+                  "Node type for addNode. Valid: imageInput, annotation, prompt, klingPrompt, nanoBanana, generateVideo, llmGenerate, splitGrid, output"
                 ),
               nodeId: z
                 .string()

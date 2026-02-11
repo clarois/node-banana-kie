@@ -216,6 +216,15 @@ const KIE_MODELS: ProviderModel[] = [
     pageUrl: "https://kie.ai/kling-2-6",
   },
   {
+    id: "kling-3.0/video",
+    name: "Kling 3.0",
+    description: "Kling 3.0 multi-shot video generation with element references.",
+    provider: "kie",
+    capabilities: ["text-to-video"],
+    coverImage: undefined,
+    pageUrl: "https://kie.ai/kling-3-0",
+  },
+  {
     id: "kling/v2-5-turbo-text-to-video-pro",
     name: "Kling 2.5 Turbo",
     description: "Kling 2.5 Turbo text-to-video generation via Kie.ai.",

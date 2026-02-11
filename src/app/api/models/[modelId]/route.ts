@@ -663,6 +663,13 @@ function getKieSchema(modelId: string): ExtractedSchema {
         { name: "video_urls", type: "image", required: true, label: "Video", isArray: true },
       ],
     },
+    "kling-3.0/video": {
+      parameters: [],
+      inputs: [
+        { name: "prompt", type: "text", required: true, label: "Prompt" },
+        { name: "image_urls", type: "image", required: false, label: "Image", isArray: true },
+      ],
+    },
     "kling/v2-5-turbo-text-to-video-pro": {
       parameters: [
         { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["16:9", "9:16", "1:1"], default: "16:9" },

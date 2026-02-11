@@ -34,6 +34,7 @@ export const defaultNodeDimensions: Record<NodeType, { width: number; height: nu
   annotation: { width: 300, height: 280 },
   prompt: { width: 320, height: 220 },
   promptConstructor: { width: 340, height: 280 },
+  klingPrompt: { width: 360, height: 420 },
   nanoBanana: { width: 300, height: 300 },
   generateVideo: { width: 300, height: 300 },
   soraStoryboard: { width: 400, height: 480 },
@@ -103,6 +104,20 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         outputText: null,
         unresolvedVars: [],
       } as PromptConstructorNodeData;
+    case "klingPrompt":
+      return {
+        prompt: "",
+        duration: 5,
+        multiShots: false,
+        shots: [
+          { id: crypto.randomUUID(), prompt: "", duration: 6 },
+          { id: crypto.randomUUID(), prompt: "", duration: 9 },
+        ],
+        sound: false,
+        mode: "std",
+        aspectRatio: "9:16",
+        elements: [],
+      };
     case "nanoBanana": {
       const nodeDefaults = loadNodeDefaults();
       const legacyDefaults = loadGenerateImageDefaults();

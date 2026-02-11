@@ -28,6 +28,7 @@ export type NodeType =
   | "annotation"
   | "prompt"
   | "promptConstructor"
+  | "klingPrompt"
   | "nanoBanana"
   | "generateVideo"
   | "soraStoryboard"
@@ -83,6 +84,40 @@ export interface PromptConstructorNodeData extends BaseNodeData {
   template: string;
   outputText: string | null;
   unresolvedVars: string[];
+}
+
+/**
+ * Kling 3.0 shot for multi-shot prompts
+ */
+export interface KlingShot {
+  id: string;
+  prompt: string;
+  duration: number; // 1 to 12 seconds per shot
+}
+
+/**
+ * Kling 3.0 element reference
+ */
+export interface KlingElement {
+  id: string;
+  name: string;
+  description: string;
+  imageDataUrls?: string[];
+  videoDataUrl?: string | null;
+}
+
+/**
+ * Kling 3.0 prompt node - multi-shot prompt + elements
+ */
+export interface KlingPromptNodeData extends BaseNodeData {
+  prompt: string;
+  duration: number; // 3 to 15 seconds for single shot
+  multiShots: boolean;
+  shots: KlingShot[];
+  sound: boolean;
+  mode: "std" | "pro";
+  aspectRatio: "16:9" | "9:16" | "1:1";
+  elements: KlingElement[];
 }
 
 /**
@@ -378,6 +413,7 @@ export type WorkflowNodeData =
   | AnnotationNodeData
   | PromptNodeData
   | PromptConstructorNodeData
+  | KlingPromptNodeData
   | NanoBananaNodeData
   | GenerateVideoNodeData
   | SoraStoryboardNodeData

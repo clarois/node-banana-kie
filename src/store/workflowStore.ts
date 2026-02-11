@@ -18,6 +18,7 @@ import {
   AnnotationNodeData,
   PromptNodeData,
   PromptConstructorNodeData,
+  KlingPromptNodeData,
   NanoBananaNodeData,
   GenerateVideoNodeData,
   VeoReferenceVideoNodeData,
@@ -147,7 +148,7 @@ interface WorkflowStore {
 
   // Helpers
   getNodeById: (id: string) => WorkflowNode | undefined;
-  getConnectedInputs: (nodeId: string) => { images: string[]; videos: string[]; audio: string[]; text: string | null; taskId: string | null; dynamicInputs: Record<string, string | string[]>; easeCurve: { bezierHandles: [number, number, number, number]; easingPreset: string | null } | null };
+  getConnectedInputs: (nodeId: string) => { images: string[]; videos: string[]; audio: string[]; text: string | null; taskId: string | null; dynamicInputs: Record<string, unknown>; easeCurve: { bezierHandles: [number, number, number, number]; easingPreset: string | null } | null };
   validateWorkflow: () => { valid: boolean; errors: string[] };
 
   // Global Image History
@@ -884,7 +885,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
     const audio: string[] = [];
     let text: string | null = null;
     let taskId: string | null = null;
-    const dynamicInputs: Record<string, string | string[]> = {};
+    const dynamicInputs: Record<string, unknown> = {};
 
     // Get the target node to check for inputSchema
     const targetNode = nodes.find((n) => n.id === nodeId);
@@ -965,6 +966,13 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         return { type: "video", value: (sourceNode.data as EaseCurveNodeData).outputVideo };
       } else if (sourceNode.type === "prompt") {
         return { type: "text", value: (sourceNode.data as PromptNodeData).prompt };
+      } else if (sourceNode.type === "klingPrompt") {
+        const klingData = sourceNode.data as KlingPromptNodeData;
+        const shotText = klingData.shots
+          .map((shot) => shot.prompt)
+          .filter((text) => text && text.trim().length > 0)
+          .join("\n");
+        return { type: "text", value: klingData.multiShots ? (shotText || klingData.prompt) : klingData.prompt };
       } else if (sourceNode.type === "promptConstructor") {
         const pcData = sourceNode.data as PromptConstructorNodeData;
         return { type: "text", value: pcData.outputText || pcData.template || null };
@@ -1086,16 +1094,43 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
         }
       });
 
+    // Check Kling 3 prompt nodes have valid shot durations
+    nodes
+      .filter((n) => n.type === "klingPrompt")
+      .forEach((node) => {
+        const data = node.data as KlingPromptNodeData;
+        if (data.multiShots) {
+          const totalDuration = data.shots.reduce((sum, shot) => sum + shot.duration, 0);
+          if (data.shots.length < 2) {
+            errors.push(`Kling 3 Prompt "${node.id}" requires at least 2 shots`);
+          }
+          if (Math.abs(totalDuration - 15) > 0.01) {
+            errors.push(`Kling 3 Prompt "${node.id}" total duration (${totalDuration}s) must equal 15s`);
+          }
+        }
+      });
+
     // Check generateVideo nodes have required text input
     nodes
       .filter((n) => n.type === "generateVideo")
       .forEach((node) => {
+        const nodeData = node.data as GenerateVideoNodeData;
+        const isKling3 = nodeData.selectedModel?.modelId === "kling-3.0/video";
         const textConnected = edges.some(
           (e) => e.target === node.id &&
                  (e.targetHandle === "text" || e.targetHandle?.startsWith("text-"))
         );
+        const klingPromptConnected = edges.some((e) => {
+          if (e.target !== node.id) return false;
+          const sourceNode = nodes.find((n) => n.id === e.source);
+          return sourceNode?.type === "klingPrompt";
+        });
 
-        if (!textConnected) {
+        if (isKling3) {
+          if (!klingPromptConnected) {
+            errors.push(`Video node "${node.id}" requires a Kling 3 Prompt node`);
+          }
+        } else if (!textConnected) {
           errors.push(`Video node "${node.id}" missing text input`);
         }
       });
@@ -1368,7 +1403,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
             const promptFromDynamic = Array.isArray(dynamicInputs.prompt)
               ? dynamicInputs.prompt[0]
               : dynamicInputs.prompt;
-            const promptText = text || promptFromDynamic || null;
+            const promptText = text || (typeof promptFromDynamic === "string" ? promptFromDynamic : null);
             if (!promptText) {
               logger.error('node.error', 'nanoBanana node missing text input', {
                 nodeId: node.id,
@@ -1587,19 +1622,6 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
           case "generateVideo": {
             const { images, text, dynamicInputs } = getConnectedInputs(node.id);
 
-            // For dynamic inputs, check if we have at least a prompt
-            const hasPrompt = text || dynamicInputs.prompt || dynamicInputs.negative_prompt;
-            if (!hasPrompt && images.length === 0) {
-              logger.error('node.error', 'generateVideo node missing inputs', {
-                nodeId: node.id,
-              });
-              updateNodeData(node.id, {
-                status: "error",
-                error: "Missing required inputs",
-              });
-              throw new Error("Missing required inputs");
-            }
-
             // Get fresh node data from store (not stale data from sorted array)
             const freshVideoNode = get().nodes.find((n) => n.id === node.id);
             const nodeData = (freshVideoNode?.data || node.data) as GenerateVideoNodeData;
@@ -1615,9 +1637,78 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
               throw new Error("No model selected");
             }
 
+            const isKling3 = nodeData.selectedModel?.modelId === "kling-3.0/video";
+            let promptText = text;
+            let requestParameters: Record<string, unknown> | undefined = nodeData.parameters;
+            let requestDynamicInputs: Record<string, unknown> | undefined = dynamicInputs;
+
+            if (isKling3) {
+              const klingEdge = edges.find((edge) => {
+                if (edge.target !== node.id) return false;
+                const sourceNode = nodes.find((n) => n.id === edge.source);
+                return sourceNode?.type === "klingPrompt";
+              });
+
+              const klingNode = klingEdge ? nodes.find((n) => n.id === klingEdge.source) : undefined;
+              const klingData = klingNode?.data as KlingPromptNodeData | undefined;
+
+              if (klingData) {
+                const shotPrompts = klingData.shots.map((shot) => shot.prompt).filter((prompt) => prompt.trim().length > 0);
+                const totalDuration = klingData.shots.reduce((sum, shot) => sum + shot.duration, 0);
+                const klingPromptText = klingData.multiShots
+                  ? (klingData.prompt || shotPrompts.join("\n"))
+                  : klingData.prompt;
+
+                promptText = klingPromptText;
+
+                const mergedParameters: Record<string, unknown> = {
+                  aspect_ratio: klingData.aspectRatio,
+                  duration: String(klingData.multiShots ? totalDuration : klingData.duration),
+                  mode: klingData.mode,
+                  sound: klingData.sound,
+                  multi_shots: klingData.multiShots,
+                };
+
+                const mergedDynamicInputs: Record<string, unknown> = {
+                  ...(dynamicInputs || {}),
+                };
+
+                if (klingData.multiShots) {
+                  mergedDynamicInputs.multi_prompt = klingData.shots.map((shot) => ({
+                    prompt: shot.prompt,
+                    duration: shot.duration,
+                  }));
+                } else {
+                  delete mergedDynamicInputs.multi_prompt;
+                }
+
+                if (klingData.elements && klingData.elements.length > 0) {
+                  mergedDynamicInputs.kling_elements = klingData.elements;
+                } else {
+                  delete mergedDynamicInputs.kling_elements;
+                }
+
+                requestParameters = mergedParameters;
+                requestDynamicInputs = Object.keys(mergedDynamicInputs).length > 0 ? mergedDynamicInputs : undefined;
+              }
+            }
+
+            // For dynamic inputs, check if we have at least a prompt
+            const hasPrompt = promptText || requestDynamicInputs?.prompt || requestDynamicInputs?.negative_prompt;
+            if (!hasPrompt && images.length === 0) {
+              logger.error('node.error', 'generateVideo node missing inputs', {
+                nodeId: node.id,
+              });
+              updateNodeData(node.id, {
+                status: "error",
+                error: "Missing required inputs",
+              });
+              throw new Error("Missing required inputs");
+            }
+
             updateNodeData(node.id, {
               inputImages: images,
-              inputPrompt: text,
+              inputPrompt: promptText,
               status: "loading",
               error: null,
             });
@@ -1627,10 +1718,10 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
 
               const requestPayload = {
                 images,
-                prompt: text,
+                prompt: promptText,
                 selectedModel: nodeData.selectedModel,
-                parameters: nodeData.parameters,
-                dynamicInputs,  // Pass dynamic inputs for schema-mapped connections
+                parameters: requestParameters,
+                dynamicInputs: requestDynamicInputs,  // Pass dynamic inputs for schema-mapped connections
                 mediaType: "video" as const,  // Signal to API to use queue for long-running video generation
               };
 
@@ -1670,7 +1761,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 provider,
                 model: nodeData.selectedModel.modelId,
                 imageCount: images.length,
-                prompt: text,
+                prompt: promptText,
               });
 
               const response = await fetch("/api/generate", {
@@ -1717,7 +1808,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 const newHistoryItem = {
                   id: videoId,
                   timestamp,
-                  prompt: text || '',
+                  prompt: promptText || '',
                   model: nodeData.selectedModel?.modelId || '',
                 };
                 const updatedHistory = [newHistoryItem, ...(nodeData.videoHistory || [])].slice(0, 50);
@@ -1741,7 +1832,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 // Auto-save video to generations folder if configured
                 const genPath = get().generationsPath;
                 if (genPath) {
-                  trackSaveGeneration(genPath, { video: videoData }, text, videoId, node.id, 'video', get, updateNodeData);
+                  trackSaveGeneration(genPath, { video: videoData }, promptText, videoId, node.id, 'video', get, updateNodeData);
                 }
               } else if (result.success && result.image) {
                 // Some models might return an image preview; treat as video for now
@@ -1752,7 +1843,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 const newHistoryItem = {
                   id: videoId,
                   timestamp,
-                  prompt: text || '',
+                  prompt: promptText || '',
                   model: nodeData.selectedModel?.modelId || '',
                 };
                 const updatedHistory = [newHistoryItem, ...(nodeData.videoHistory || [])].slice(0, 50);
@@ -1775,7 +1866,7 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 // Auto-save image preview to generations folder if configured
                 const genPath = get().generationsPath;
                 if (genPath) {
-                  trackSaveGeneration(genPath, { image: result.image }, text, videoId, node.id, 'video', get, updateNodeData);
+                  trackSaveGeneration(genPath, { image: result.image }, promptText, videoId, node.id, 'video', get, updateNodeData);
                 }
               } else {
                 logger.error('api.error', `${provider} API video generation failed`, {

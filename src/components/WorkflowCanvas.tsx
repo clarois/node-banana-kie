@@ -25,6 +25,7 @@ import {
   AnnotationNode,
   PromptNode,
   PromptConstructorNode,
+  KlingPromptNode,
   GenerateImageNode,
   NanoBananaNode,
   GenerateVideoNode,
@@ -64,6 +65,7 @@ const nodeTypes: NodeTypes = {
   annotation: AnnotationNode,
   prompt: PromptNode,
   promptConstructor: PromptConstructorNode,
+  klingPrompt: KlingPromptNode,
   nanoBanana: NanoBananaNode,
   generateVideo: GenerateVideoNode,
   soraStoryboard: SoraStoryboardNode,
@@ -120,6 +122,8 @@ const getNodeHandles = (nodeType: string): { inputs: string[]; outputs: string[]
       return { inputs: ["text"], outputs: ["text"] };
     case "promptConstructor":
       return { inputs: ["text"], outputs: ["text"] };
+    case "klingPrompt":
+      return { inputs: [], outputs: ["text"] };
     case "nanoBanana":
       return { inputs: ["image", "text"], outputs: ["image"] };
     case "generateVideo":
@@ -1063,6 +1067,7 @@ export function WorkflowCanvas() {
             annotation: { width: 300, height: 280 },
             prompt: { width: 320, height: 220 },
             promptConstructor: { width: 340, height: 280 },
+            klingPrompt: { width: 360, height: 420 },
             nanoBanana: { width: 300, height: 300 },
             generateVideo: { width: 300, height: 300 },
             soraStoryboard: { width: 400, height: 480 },
@@ -1613,6 +1618,8 @@ export function WorkflowCanvas() {
                 return "#f97316";
               case "promptConstructor":
                 return "#f472b6";
+              case "klingPrompt":
+                return "#38bdf8";
               case "nanoBanana":
                 return "#22c55e";
               case "generateVideo":

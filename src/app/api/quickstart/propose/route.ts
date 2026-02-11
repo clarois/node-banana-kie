@@ -44,6 +44,7 @@ function validateProposalShape(data: unknown): string | null {
     "imageInput",
     "annotation",
     "prompt",
+    "klingPrompt",
     "nanoBanana",
     "generateVideo",
     "llmGenerate",

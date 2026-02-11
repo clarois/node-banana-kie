@@ -13,13 +13,25 @@ interface ValidationResult {
 
 const VALID_NODE_TYPES: NodeType[] = [
   "imageInput",
+  "audioInput",
   "annotation",
   "prompt",
+  "promptConstructor",
+  "klingPrompt",
   "nanoBanana",
   "generateVideo",
+  "soraStoryboard",
+  "veoReferenceVideo",
+  "veoExtendVideo",
+  "veo1080pVideo",
+  "veo4kVideo",
   "llmGenerate",
   "splitGrid",
   "output",
+  "outputGallery",
+  "imageCompare",
+  "videoStitch",
+  "easeCurve",
 ];
 
 const VALID_HANDLE_TYPES = ["image", "text", "reference"];
@@ -31,8 +43,14 @@ const DEFAULT_DIMENSIONS: Record<NodeType, { width: number; height: number }> = 
   annotation: { width: 300, height: 280 },
   prompt: { width: 320, height: 220 },
   promptConstructor: { width: 340, height: 280 },
+  klingPrompt: { width: 360, height: 420 },
   nanoBanana: { width: 300, height: 300 },
   generateVideo: { width: 300, height: 300 },
+  soraStoryboard: { width: 400, height: 480 },
+  veoReferenceVideo: { width: 320, height: 300 },
+  veoExtendVideo: { width: 320, height: 280 },
+  veo1080pVideo: { width: 300, height: 240 },
+  veo4kVideo: { width: 300, height: 240 },
   llmGenerate: { width: 320, height: 360 },
   splitGrid: { width: 300, height: 320 },
   output: { width: 320, height: 320 },
@@ -223,6 +241,69 @@ function createDefaultNodeData(type: NodeType): WorkflowNodeData {
         template: "",
         outputText: null,
         unresolvedVars: [],
+      };
+    case "klingPrompt":
+      return {
+        prompt: "",
+        duration: 5,
+        multiShots: false,
+        shots: [
+          { id: crypto.randomUUID(), prompt: "", duration: 6 },
+          { id: crypto.randomUUID(), prompt: "", duration: 9 },
+        ],
+        sound: false,
+        mode: "std",
+        aspectRatio: "9:16",
+        elements: [],
+      };
+    case "soraStoryboard":
+      return {
+        inputImage: null,
+        scenes: [
+          { id: crypto.randomUUID(), prompt: "", duration: 15 },
+        ],
+        nFrames: "15",
+        aspectRatio: "landscape",
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+      };
+    case "veoReferenceVideo":
+      return {
+        inputImages: [],
+        inputPrompt: null,
+        outputVideo: null,
+        outputTaskId: null,
+        aspectRatio: "16:9",
+        parameters: {},
+        status: "idle",
+        error: null,
+      };
+    case "veoExtendVideo":
+      return {
+        inputTaskId: null,
+        inputPrompt: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+      };
+    case "veo1080pVideo":
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
+      };
+    case "veo4kVideo":
+      return {
+        inputTaskId: null,
+        outputVideo: null,
+        outputTaskId: null,
+        status: "idle",
+        error: null,
       };
     case "nanoBanana":
       return {

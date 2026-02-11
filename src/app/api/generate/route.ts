@@ -34,7 +34,7 @@ interface MultiProviderGenerateRequest extends GenerateRequest {
   selectedModel?: SelectedModel;
   parameters?: Record<string, unknown>;
   /** Dynamic inputs from schema-based connections (e.g., image_url, tail_image_url, prompt) */
-  dynamicInputs?: Record<string, string | string[]>;
+  dynamicInputs?: Record<string, unknown>;
   veoOperation?: "reference" | "extend" | "get1080p" | "get4k";
 }
 
@@ -1338,6 +1338,16 @@ function getKieModelDefaults(modelId: string): Record<string, unknown> {
         character_orientation: "video",
       };
 
+    // Kling 3.0 video
+    case "kling-3.0/video":
+      return {
+        aspect_ratio: "16:9",
+        duration: "5",
+        mode: "pro",
+        sound: false,
+        multi_shots: false,
+      };
+
     // Kling 2.5 turbo models
     case "kling/v2-5-turbo-text-to-video-pro":
     case "kling/v2-5-turbo-image-to-video-pro":
@@ -1550,6 +1560,116 @@ async function uploadImageToKie(
   }
 
   console.log(`[API:${requestId}] Image uploaded: ${downloadUrl.substring(0, 80)}...`);
+  return downloadUrl;
+}
+
+/**
+ * Upload a base64 video to Kie.ai and get a URL
+ * Required for Kling elements that include video inputs
+ */
+async function uploadVideoToKie(
+  requestId: string,
+  apiKey: string,
+  base64Video: string
+): Promise<string> {
+  let declaredMimeType = "video/mp4";
+  let videoData = base64Video;
+
+  if (base64Video.startsWith("data:")) {
+    const matches = base64Video.match(/^data:([^;]+);base64,(.+)$/);
+    if (matches) {
+      declaredMimeType = matches[1];
+      videoData = matches[2];
+    }
+  }
+
+  const extensionMap: Record<string, string> = {
+    "video/mp4": "mp4",
+    "video/quicktime": "mov",
+    "video/webm": "webm",
+    "video/x-matroska": "mkv",
+  };
+
+  const ext = extensionMap[declaredMimeType] || "mp4";
+  const filename = `upload_${Date.now()}.${ext}`;
+  const dataUrl = `data:${declaredMimeType};base64,${videoData}`;
+
+  console.log(`[API:${requestId}] Uploading video to Kie.ai: ${filename} (${(videoData.length / 1024).toFixed(1)}KB) [declared: ${declaredMimeType}]`);
+
+  const uploadTargets = [
+    { url: "https://kieai.redpandaai.co/api/file-base64-upload", retries: 2 },
+    { url: "https://api.kie.ai/api/v1/file-base64-upload", retries: 1 },
+  ];
+
+  let response: Response | null = null;
+  const errors: string[] = [];
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  for (const target of uploadTargets) {
+    for (let attempt = 1; attempt <= target.retries; attempt += 1) {
+      try {
+        response = await fetch(target.url, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            base64Data: dataUrl,
+            uploadPath: "videos",
+            fileName: filename,
+          }),
+        });
+      } catch (error) {
+        errors.push(`${target.url} (attempt ${attempt}) -> ${formatFetchError(error, target.url)}`);
+        response = null;
+        if (attempt < target.retries) {
+          await sleep(300);
+        }
+        continue;
+      }
+
+      if (response.ok) {
+        break;
+      }
+
+      const errorText = await response.text();
+      errors.push(`${target.url} (attempt ${attempt}) -> HTTP ${response.status}: ${errorText.substring(0, 200)}`);
+      response = null;
+      if (attempt < target.retries) {
+        await sleep(300);
+      }
+    }
+
+    if (response) {
+      break;
+    }
+  }
+
+  if (!response) {
+    throw new Error(`Kie upload request failed: ${errors.join(" | ")}`);
+  }
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to upload video: ${response.status} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  console.log(`[API:${requestId}] Kie upload response:`, JSON.stringify(result).substring(0, 300));
+
+  if (result.code && result.code !== 200 && !result.success) {
+    throw new Error(`Upload failed: ${result.msg || "Unknown error"}`);
+  }
+
+  const downloadUrl = result.data?.downloadUrl || result.downloadUrl || result.url;
+
+  if (!downloadUrl) {
+    console.error(`[API:${requestId}] Upload response has no URL:`, result);
+    throw new Error(`No download URL in upload response. Response: ${JSON.stringify(result).substring(0, 200)}`);
+  }
+
+  console.log(`[API:${requestId}] Video uploaded: ${downloadUrl.substring(0, 80)}...`);
   return downloadUrl;
 }
 
@@ -1867,13 +1987,99 @@ async function generateWithKie(
   const handledImageKeys = new Set<string>();
 
   if (input.dynamicInputs) {
-    for (const [key, value] of Object.entries(input.dynamicInputs)) {
+    const dynamicInputs = input.dynamicInputs;
+
+    if (Array.isArray(dynamicInputs.kling_elements)) {
+      const processedElements: Array<Record<string, unknown>> = [];
+
+      for (const rawElement of dynamicInputs.kling_elements) {
+        if (!rawElement || typeof rawElement !== "object") {
+          continue;
+        }
+
+        const element = rawElement as Record<string, unknown>;
+        const name = typeof element.name === "string" ? element.name : undefined;
+        const description = typeof element.description === "string" ? element.description : undefined;
+
+        if (!name || !description) {
+          continue;
+        }
+
+        const imageInputs = Array.isArray(element.element_input_urls)
+          ? element.element_input_urls
+          : Array.isArray(element.imageDataUrls)
+            ? element.imageDataUrls
+            : [];
+
+        const videoInputs = Array.isArray(element.element_input_video_urls)
+          ? element.element_input_video_urls
+          : element.videoDataUrl
+            ? [element.videoDataUrl]
+            : [];
+
+        const processedImageUrls: string[] = [];
+        for (const item of imageInputs) {
+          if (typeof item !== "string") continue;
+          if (item.startsWith("data:image")) {
+            const url = await uploadImageToKie(requestId, apiKey, item);
+            processedImageUrls.push(url);
+          } else if (item.startsWith("http")) {
+            processedImageUrls.push(item);
+          }
+        }
+
+        const processedVideoUrls: string[] = [];
+        for (const item of videoInputs) {
+          if (typeof item !== "string") continue;
+          if (item.startsWith("data:video") || item.startsWith("data:application/octet-stream")) {
+            const url = await uploadVideoToKie(requestId, apiKey, item);
+            processedVideoUrls.push(url);
+          } else if (item.startsWith("http")) {
+            processedVideoUrls.push(item);
+          }
+        }
+
+        const elementPayload: Record<string, unknown> = {
+          name,
+          description,
+        };
+
+        if (processedVideoUrls.length > 0) {
+          elementPayload.element_input_video_urls = processedVideoUrls;
+        } else if (processedImageUrls.length > 0) {
+          elementPayload.element_input_urls = processedImageUrls;
+        }
+
+        processedElements.push(elementPayload);
+      }
+
+      if (processedElements.length > 0) {
+        inputParams.kling_elements = processedElements;
+      }
+    }
+
+    if (Array.isArray(dynamicInputs.multi_prompt)) {
+      inputParams.multi_prompt = dynamicInputs.multi_prompt;
+    }
+
+    for (const [key, value] of Object.entries(dynamicInputs)) {
+      if (key === "kling_elements" || key === "multi_prompt") {
+        continue;
+      }
       if (value !== null && value !== undefined && value !== '') {
         // Check if this is an image input that needs uploading
         if (typeof value === 'string' && value.startsWith('data:image')) {
           // Single data URL - upload it
           const url = await uploadImageToKie(requestId, apiKey, value);
           // Singular keys get a string, plural keys get an array
+          if (key === "image_url" || key === "video_url" || key === "tail_image_url") {
+            inputParams[key] = url;
+          } else {
+            inputParams[key] = [url];
+          }
+          handledImageKeys.add(key);
+        } else if (typeof value === "string" && (value.startsWith("data:video") || value.startsWith("data:application/octet-stream"))) {
+          const url = await uploadVideoToKie(requestId, apiKey, value);
           if (key === "image_url" || key === "video_url" || key === "tail_image_url") {
             inputParams[key] = url;
           } else {
@@ -1896,6 +2102,9 @@ async function generateWithKie(
             for (const item of value) {
               if (typeof item === 'string' && item.startsWith('data:image')) {
                 const url = await uploadImageToKie(requestId, apiKey, item);
+                processedArray.push(url);
+              } else if (typeof item === "string" && (item.startsWith("data:video") || item.startsWith("data:application/octet-stream"))) {
+                const url = await uploadVideoToKie(requestId, apiKey, item);
                 processedArray.push(url);
               } else if (typeof item === 'string' && item.startsWith('http')) {
                 processedArray.push(item);
@@ -2720,7 +2929,7 @@ export async function POST(request: NextRequest) {
       const processedImages: string[] = images ? [...images] : [];
 
       // Process dynamicInputs: filter empty values, keep Data URIs
-      let processedDynamicInputs: Record<string, string | string[]> | undefined = undefined;
+      let processedDynamicInputs: Record<string, unknown> | undefined = undefined;
 
       if (dynamicInputs) {
         processedDynamicInputs = {};
@@ -2810,7 +3019,7 @@ export async function POST(request: NextRequest) {
       const processedImages: string[] = images ? [...images] : [];
 
       // Process dynamicInputs: filter empty values
-      let processedDynamicInputs: Record<string, string | string[]> | undefined = undefined;
+      let processedDynamicInputs: Record<string, unknown> | undefined = undefined;
 
       if (dynamicInputs) {
         processedDynamicInputs = {};
@@ -3144,7 +3353,7 @@ export async function POST(request: NextRequest) {
       const processedImages: string[] = images ? [...images] : [];
 
       // Process dynamicInputs: filter empty values
-      let processedDynamicInputs: Record<string, string | string[]> | undefined = undefined;
+      let processedDynamicInputs: Record<string, unknown> | undefined = undefined;
 
       if (dynamicInputs) {
         processedDynamicInputs = {};
@@ -3237,7 +3446,7 @@ export async function POST(request: NextRequest) {
       const processedImages: string[] = images ? [...images] : [];
 
       // Process dynamicInputs: filter empty values
-      let processedDynamicInputs: Record<string, string | string[]> | undefined = undefined;
+      let processedDynamicInputs: Record<string, unknown> | undefined = undefined;
 
       if (dynamicInputs) {
         processedDynamicInputs = {};

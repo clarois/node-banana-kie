@@ -3,6 +3,7 @@ export { AudioInputNode } from "./AudioInputNode";
 export { AnnotationNode } from "./AnnotationNode";
 export { PromptNode } from "./PromptNode";
 export { PromptConstructorNode } from "./PromptConstructorNode";
+export { KlingPromptNode } from "./KlingPromptNode";
 export { GenerateImageNode, NanoBananaNode } from "./GenerateImageNode";
 export { GenerateVideoNode } from "./GenerateVideoNode";
 export { SoraStoryboardNode } from "./SoraStoryboardNode";

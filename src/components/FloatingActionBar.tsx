@@ -126,6 +126,17 @@ function PromptComboButton() {
             Prompt Node
           </button>
           <button
+            onClick={() => handleAddNode("klingPrompt")}
+            draggable
+            onDragStart={(e) => handleDragStart(e, "klingPrompt")}
+            className="w-full px-3 py-2 text-left text-[11px] font-medium text-neutral-300 hover:bg-neutral-700 hover:text-neutral-100 transition-colors flex items-center gap-2 cursor-grab active:cursor-grabbing"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 6.75h19.5M2.25 17.25h19.5M5.25 6.75v10.5M18.75 6.75v10.5" />
+            </svg>
+            Kling 3 Prompt
+          </button>
+          <button
             onClick={() => handleAddNode("soraStoryboard")}
             draggable
             onDragStart={(e) => handleDragStart(e, "soraStoryboard")}
