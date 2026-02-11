@@ -1853,7 +1853,10 @@ export const useWorkflowStore = create<WorkflowStore>((set, get) => ({
                 body: JSON.stringify({
                   prompt: promptText,
                   images,
-                  parameters: nodeData.parameters,
+                  parameters: {
+                    ...nodeData.parameters,
+                    aspect_ratio: nodeData.aspectRatio,
+                  },
                   veoOperation: "reference",
                   mediaType: "video" as const,
                 }),

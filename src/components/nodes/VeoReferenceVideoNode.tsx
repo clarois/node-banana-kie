@@ -27,6 +27,13 @@ export function VeoReferenceVideoNode({ id, data, selected }: NodeProps<VeoRefer
     [id, updateNodeData]
   );
 
+  const handleAspectRatioChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      updateNodeData(id, { aspectRatio: event.target.value as "16:9" | "9:16" });
+    },
+    [id, updateNodeData]
+  );
+
   return (
     <BaseNode
       id={id}
@@ -65,6 +72,18 @@ export function VeoReferenceVideoNode({ id, data, selected }: NodeProps<VeoRefer
             TaskId: {nodeData.outputTaskId}
           </div>
         )}
+
+        <label className="flex items-center justify-between gap-2 text-[10px] text-neutral-300">
+          <span>Aspect</span>
+          <select
+            value={nodeData.aspectRatio ?? "16:9"}
+            onChange={handleAspectRatioChange}
+            className="nodrag nopan nowheel bg-neutral-900/50 border border-neutral-700 rounded px-2 py-1 text-[10px] text-neutral-200"
+          >
+            <option value="16:9">16:9</option>
+            <option value="9:16">9:16</option>
+          </select>
+        </label>
 
         <textarea
           value={nodeData.inputPrompt || ""}

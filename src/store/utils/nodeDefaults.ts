@@ -173,6 +173,7 @@ export const createDefaultNodeData = (type: NodeType): WorkflowNodeData => {
         inputPrompt: null,
         outputVideo: null,
         outputTaskId: null,
+        aspectRatio: "16:9",
         parameters: {},
         status: "idle",
         error: null,

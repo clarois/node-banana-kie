@@ -189,6 +189,7 @@ export interface VeoReferenceVideoNodeData extends BaseNodeData {
   outputVideo: string | null;
   outputVideoRef?: string;
   outputTaskId?: string | null;
+  aspectRatio: "16:9" | "9:16";
   parameters?: Record<string, unknown>;
   status: NodeStatus;
   error: string | null;

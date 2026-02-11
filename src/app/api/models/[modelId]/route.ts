@@ -595,25 +595,6 @@ function getKieSchema(modelId: string): ExtractedSchema {
         { name: "image_input", type: "image", required: false, label: "Image", isArray: true },
       ],
     },
-    "google/nano-banana-edit": {
-      parameters: [
-        { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"], default: "1:1" },
-        { name: "output_format", type: "string", description: "Output format", enum: ["png", "jpeg"], default: "png" },
-      ],
-      inputs: [
-        { name: "prompt", type: "text", required: true, label: "Edit Instructions" },
-        { name: "image_urls", type: "image", required: true, label: "Image", isArray: true },
-      ],
-    },
-    "google/nano-banana": {
-      parameters: [
-        { name: "image_size", type: "string", description: "Output aspect ratio", enum: ["1:1", "9:16", "16:9", "3:4", "4:3", "3:2", "2:3", "5:4", "4:5", "21:9", "auto"], default: "1:1" },
-        { name: "output_format", type: "string", description: "Output format", enum: ["png", "jpeg"], default: "png" },
-      ],
-      inputs: [
-        { name: "prompt", type: "text", required: true, label: "Prompt" },
-      ],
-    },
     "grok-imagine/text-to-image": {
       parameters: [
         { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["2:3", "3:2", "1:1", "16:9", "9:16"], default: "1:1" },
@@ -641,7 +622,6 @@ function getKieSchema(modelId: string): ExtractedSchema {
     "grok-imagine/image-to-video": {
       parameters: [
         { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["2:3", "3:2", "1:1", "16:9", "9:16"], default: "2:3" },
-        { name: "resolution", type: "string", description: "Output resolution", enum: ["480p", "720p"], default: "480p" },
         { name: "duration", type: "string", description: "Video duration in seconds", enum: ["6", "10"], default: "6" },
         { name: "mode", type: "string", description: "Generation mode", enum: ["fun", "normal", "spicy"], default: "normal" },
         { name: "seed", type: "integer", description: "Random seed for reproducibility", minimum: 0 },
@@ -783,7 +763,7 @@ function getKieSchema(modelId: string): ExtractedSchema {
     },
     "veo3-fast/reference-to-video": {
       parameters: [
-        { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["16:9"], default: "16:9" },
+        { name: "aspect_ratio", type: "string", description: "Output aspect ratio", enum: ["16:9", "9:16"], default: "16:9" },
         { name: "seeds", type: "integer", description: "Random seed (10000-99999)", minimum: 10000, maximum: 99999 },
         { name: "enableTranslation", type: "boolean", description: "Enable prompt translation", default: true },
         { name: "watermark", type: "boolean", description: "Apply watermark", default: false },
